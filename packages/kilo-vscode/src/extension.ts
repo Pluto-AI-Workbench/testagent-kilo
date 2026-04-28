@@ -318,8 +318,6 @@ export function activate(context: vscode.ExtensionContext) {
       // testagent_change end
 
       console.log("[TestAgent] Creating new terminal...")
-      const binName = process.platform === "win32" ? "testagent.exe" : "testagent"
-      const cliPath = path.join(context.extensionPath, "bin", binName)
 
       // testagent_change start - inject user ID into terminal env (non-blocking)
       let userId: string | undefined
@@ -357,7 +355,7 @@ export function activate(context: vscode.ExtensionContext) {
       // Wait for auth to complete, then send command with env vars if available
       await authPromise
       
-      let command = `& "${cliPath}" --port ${port}`
+      let command = `testagent --port ${port}`
       if (userId) {
         // On Windows PowerShell, use $env: syntax; on Unix shells, use export
         if (process.platform === "win32") {

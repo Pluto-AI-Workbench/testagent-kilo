@@ -99,14 +99,15 @@ export function useSlashCommand(vscode: VSCodeContext, exclude?: Set<string>): S
         vscode.postMessage({ type: "openSettingsPanel" })
       },
     },
-    {
-      name: "remote",
-      description: "切换远程控制",
-      hints: [],
-      action: () => {
-        vscode.postMessage({ type: "toggleRemote" })
-      },
-    },
+    // testagent_change 注释掉
+    // {
+    //   name: "remote",
+    //   description: "切换远程控制",
+    //   hints: [],
+    //   action: () => {
+    //     vscode.postMessage({ type: "toggleRemote" })
+    //   },
+    // },
     {
       name: "restart",
       description: "重启 CLI 后端（重新加载 skills 和 plugins）",

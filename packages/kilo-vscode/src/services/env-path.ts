@@ -95,8 +95,8 @@ if ($currentPath -notlike "*$binDir*") {
         if (added) {
           console.log("[TestAgent] Added CLI to user PATH:", binDir)
           const message = pathChanged
-            ? "TestAgent CLI has been updated in your PATH. Restart your terminal to use the new version."
-            : "TestAgent CLI has been added to your PATH. Restart your terminal to use 'testagent' command."
+            ? "TestAgent CLI 已更新到你的 PATH 中，重启终端后生效。"
+            : "TestAgent CLI 已添加到你的 PATH 中，重启终端后可使用 'testagent' 命令。"
           vscode.window.showInformationMessage(message)
         } else if (exists) {
           console.log("[TestAgent] CLI already in PATH:", binDir)
