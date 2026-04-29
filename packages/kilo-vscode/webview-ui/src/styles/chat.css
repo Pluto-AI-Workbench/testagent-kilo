@@ -2650,20 +2650,6 @@ body.vscode-light
     padding: 0 14px;
   }
 
-  [data-slot="question-options"] {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 4px 4px;
-    max-height: 40vh;
-    overflow-y: auto;
-    scrollbar-width: none;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  }
-
   [data-slot="question-option"] {
     display: flex;
     align-items: flex-start;
