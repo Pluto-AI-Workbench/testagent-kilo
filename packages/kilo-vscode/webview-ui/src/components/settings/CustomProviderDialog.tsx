@@ -447,23 +447,6 @@ const CustomProviderDialog = (props: CustomProviderDialogProps) => {
           onSubmit={save}
           style={{ padding: "0 10px 24px 10px", display: "flex", "flex-direction": "column", gap: "24px" }}
         >
-          <div style={{ "font-size": "14px", color: "var(--text-base)" }}>
-            {language.t("provider.custom.description.prefix")}
-            <a
-              href="https://kilo.ai/docs/providers/#custom-provider"
-              onClick={(e) => {
-                e.preventDefault()
-                vscode.postMessage({
-                  type: "openExternal",
-                  url: "https://kilo.ai/docs/providers/#custom-provider",
-                })
-              }}
-            >
-              {language.t("provider.custom.description.link")}
-            </a>
-            {language.t("provider.custom.description.suffix")}
-          </div>
-
           <div style={{ display: "flex", "flex-direction": "column", gap: "16px" }}>
             <TextField
               autofocus={!editing()}

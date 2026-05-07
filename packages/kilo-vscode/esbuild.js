@@ -56,6 +56,23 @@ const esbuildProblemMatcherPlugin = {
 }
 
 /**
+ * testagent_change start: Force jsonc-parser to use ESM version to avoid CommonJS require issues
+ * @type {import('esbuild').Plugin}
+ */
+const jsoncParserEsmPlugin = {
+  name: "jsonc-parser-esm",
+  setup(build) {
+    // Redirect jsonc-parser imports to use the ESM version
+    build.onResolve({ filter: /^jsonc-parser$/ }, (args) => {
+      const jsoncPath = require.resolve("jsonc-parser")
+      const esmPath = jsoncPath.replace(/lib[\/\\]umd[\/\\]main\.js$/, "lib/esm/main.js")
+      return { path: esmPath }
+    })
+  },
+}
+// testagent_change end
+
+/**
  * Stub the pierre worker module so the Diff/Code components work without
  * web workers in the VS Code webview. The `@pierre/diffs` library handles
  * undefined worker pools gracefully (renders without syntax highlighting).
@@ -177,9 +194,13 @@ async function main() {
     sourcesContent: false,
     platform: "node",
     outfile: "dist/extension.js",
-    external: ["vscode", "jsonc-parser"], // testagent_change: mark jsonc-parser as external
+    external: ["vscode"], // testagent_change: only vscode is external, bundle everything else including jsonc-parser
     logLevel: "silent",
-    plugins: [esbuildProblemMatcherPlugin],
+    // testagent_change start: ensure proper CommonJS handling for jsonc-parser
+    mainFields: ["module", "main"],
+    conditions: ["node"],
+    plugins: [jsoncParserEsmPlugin, esbuildProblemMatcherPlugin], // testagent_change: add jsonc-parser ESM plugin
+    // testagent_change end
   })
 
   // Build Agent Manager webview (SolidJS, shares components with sidebar)
