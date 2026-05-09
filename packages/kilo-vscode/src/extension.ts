@@ -263,6 +263,20 @@ export function activate(context: vscode.ExtensionContext) {
         }
       }
     }),
+    // testagent_change 增加reloadMcp
+    vscode.commands.registerCommand("testagent.new.reloadMcp", async () => {
+      try {
+        console.log("[TestAgent] Reload MCP command triggered")
+        await provider.reloadMcp()
+        return { success: true }
+      } catch (error) {
+        console.error("[TestAgent] Failed to reload MCP:", error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }),
     vscode.commands.registerCommand("testagent.new.agentManagerOpen", () => {
       agentManagerProvider.openPanel()
     }),

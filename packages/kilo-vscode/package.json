@@ -101,6 +101,11 @@
         "category": "TestAgent"
       },
       {
+        "command": "testagent.new.reloadMcp",
+        "title": "Reload MCP Servers",
+        "category": "TestAgent"
+      },
+      {
         "command": "testagent.new.openInTab",
         "title": "TestAgent",
         "icon": {

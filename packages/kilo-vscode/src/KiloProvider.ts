@@ -1769,10 +1769,10 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
         // 使用已有的 instance.dispose API 来清除所有缓存（包括 skills）
         await this.client.instance.dispose({ directory: dir })
         console.log("[TestAgent] Backend instance cache cleared")
-        
+
         // 等待足够长的时间确保后端完全重建状态
         // 这个延迟很重要，因为 InstanceState 需要时间重新初始化
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, 500))
       } catch (error) {
         console.warn("[TestAgent] Backend cache clear failed (non-critical):", error)
       }
@@ -1785,6 +1785,73 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     // testagent_change end
 
     console.log("[TestAgent] Skills and commands reloaded successfully")
+  }
+
+  /**
+   * Reload MCP servers from config (for external plugins that modify config)
+   * Public API that can be called via VS Code commands
+   * testagent_change
+   * 
+   * Uses the backend's dedicated /mcp/reload endpoint to reload only MCP servers
+   * without affecting other services (Sessions, Plugins, Skills, etc.)
+   */
+  public async reloadMcp(): Promise<void> {
+    console.log("[TestAgent] Reloading MCP servers from config...")
+
+    // Clear frontend cache
+    this.cachedMcpStatusMessage = null
+
+    if (!this.client || this.connectionState !== "connected") {
+      console.warn("[TestAgent] Cannot reload MCP: not connected to CLI backend")
+      vscode.window.showWarningMessage("无法重新加载 MCP 服务器：未连接到后端服务")
+      return
+    }
+
+    try {
+      // Get the underlying SDK client to access its request method
+      const sdkClient = (this.client as any).client
+      if (!sdkClient || typeof sdkClient.post !== "function") {
+        throw new Error("SDK client not available or invalid")
+      }
+
+      // Call the backend /mcp/reload endpoint using SDK's post method
+      // This uses the SDK's built-in authentication, avoiding 401 errors
+      const response = await sdkClient.post({
+        url: "/mcp/reload",
+        body: {},
+      })
+
+      if (response.error) {
+        throw new Error(response.error.message || String(response.error))
+      }
+
+      const result = response.data as { success?: boolean }
+      if (!result?.success) {
+        throw new Error("Backend returned success: false")
+      }
+
+      console.log("[TestAgent] Backend MCP reload completed")
+
+      // Wait a bit for backend to stabilize
+      await new Promise((resolve) => setTimeout(resolve, 300))
+
+      // Refresh MCP status in UI
+      await this.fetchAndSendMcpStatus()
+
+      console.log("[TestAgent] MCP servers reloaded successfully")
+      vscode.window.showInformationMessage("MCP 服务器已重新加载")
+    } catch (error) {
+      console.error("[TestAgent] Failed to reload MCP servers:", error)
+      const message = error instanceof Error ? error.message : String(error)
+      vscode.window.showErrorMessage(`重新加载 MCP 服务器失败: ${message}`)
+      
+      // Fallback: try to refresh UI anyway
+      try {
+        await this.fetchAndSendMcpStatus()
+      } catch (fetchError) {
+        console.error("[TestAgent] Failed to fetch MCP status:", fetchError)
+      }
+    }
   }
 
   private async fetchAndSendSkills(): Promise<void> {
