@@ -1,5 +1,7 @@
 import * as vscode from "vscode"
 import { ServerManager } from "./server-manager"
+import { NodeServerManager } from "./node-server-manager"
+import { isTestagent } from "./runtime"
 import { createKiloClient, type KiloClient, type Event } from "@kilocode/sdk/v2/client"
 import { SdkSSEAdapter } from "./sdk-sse-adapter"
 import type { ServerConfig } from "./types"
@@ -48,7 +50,7 @@ async function drainNetworkWaits(client: KiloClient, dir: string) {
  * Multiple KiloProvider instances subscribe to it for SSE events and state changes.
  */
 export class KiloConnectionService {
-  private readonly serverManager: ServerManager
+  private readonly serverManager: ServerManager | NodeServerManager
   private client: KiloClient | null = null
   private sseClient: SdkSSEAdapter | null = null
   private info: { port: number } | null = null
@@ -82,15 +84,17 @@ export class KiloConnectionService {
   private unsubRemote: (() => void) | null = null
 
   constructor(context: vscode.ExtensionContext) {
-    this.serverManager = new ServerManager(context)
+    this.serverManager = isTestagent() ? new ServerManager(context) : new NodeServerManager(context)
     // testagent_change start - sync user ID to CLI whenever auth session changes
-    context.subscriptions.push(
-      vscode.authentication.onDidChangeSessions(async (e) => {
-        if (e.provider.id === "tscode-oauth") {
-          await this.syncUserId()
-        }
-      }),
-    )
+    if (isTestagent()) {
+      context.subscriptions.push(
+        vscode.authentication.onDidChangeSessions(async (e) => {
+          if (e.provider.id === "tscode-oauth") {
+            await this.syncUserId()
+          }
+        }),
+      )
+    }
     // testagent_change end
   }
 
@@ -414,8 +418,11 @@ export class KiloConnectionService {
           if (error) throw new Error(`Failed to reject question ${q.id}: ${String(error)}`)
         }
       }
-      await drainSuggestions(this.client, dir)
-      await drainNetworkWaits(this.client, dir)
+      // testagent_change - these APIs only exist on the Kilo/testagent backend
+      if (isTestagent()) {
+        await drainSuggestions(this.client, dir)
+        await drainNetworkWaits(this.client, dir)
+      }
     }
     for (const listener of this.clearPendingPromptsListeners) {
       listener()
@@ -656,7 +663,9 @@ export class KiloConnectionService {
     this.startHealthPoll(config.baseUrl, config.password)
 
     // testagent_change start - push current user ID to CLI after connection
-    await this.syncUserId()
+    if (isTestagent()) {
+      await this.syncUserId()
+    }
     // testagent_change end
   }
 

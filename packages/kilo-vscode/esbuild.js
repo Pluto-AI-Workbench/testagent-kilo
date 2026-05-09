@@ -5,6 +5,11 @@ const { solidPlugin } = require("esbuild-plugin-solid")
 const production = process.argv.includes("--production")
 const watch = process.argv.includes("--watch")
 
+// Backend runtime selection: "testagent" (Bun binary) or "opencode" (Node.js)
+// Set via BACKEND_RUNTIME env var at build time. Defaults to "testagent".
+const backendRuntime = process.env.BACKEND_RUNTIME || "testagent"
+console.log(`[build] Backend runtime: ${backendRuntime}`)
+
 /**
  * Force all solid-js imports (from kilo-ui and the webview) to resolve to
  * the **same** copy so SolidJS contexts are shared across packages.
@@ -196,6 +201,10 @@ async function main() {
     outfile: "dist/extension.js",
     external: ["vscode"], // testagent_change: only vscode is external, bundle everything else including jsonc-parser
     logLevel: "silent",
+    // Inject compile-time backend runtime constant for dual-build support
+    define: {
+      BACKEND_RUNTIME: JSON.stringify(backendRuntime),
+    },
     // testagent_change start: ensure proper CommonJS handling for jsonc-parser
     mainFields: ["module", "main"],
     conditions: ["node"],

@@ -52,3 +52,6 @@ tsconfig.tsbuildinfo
 # Test Artifacts
 packages/app/.artifacts/
 packages/opencode/.artifacts/
+
+# Build artifacts - nodejs-server
+packages/kilo-vscode/nodejs-server/

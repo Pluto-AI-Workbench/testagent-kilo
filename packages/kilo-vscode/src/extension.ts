@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 import * as path from "path"
 import * as net from "net" // testagent_change - import net at top level
+import { isTestagent } from "./services/cli-backend/runtime"
 import { KiloProvider } from "./KiloProvider"
 import { AgentManagerProvider } from "./agent-manager/AgentManagerProvider"
 import { VscodeHost } from "./agent-manager/vscode-host"
@@ -34,7 +35,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Add CLI to PATH on first activation (Windows only)
   // void ensureCliInPath(context)
 
-  const telemetry = TelemetryProxy.getInstance()
+  const telemetry = isTestagent() ? TelemetryProxy.getInstance() : null
 
   // Create shared connection service (one server for all webviews)
   const connectionService = new KiloConnectionService(context)
@@ -44,30 +45,39 @@ export function activate(context: vscode.ExtensionContext) {
   browserAutomationService.syncWithSettings()
 
   // Create remote status service (one status bar item for all webviews)
-  const remoteService = new RemoteStatusService()
-  context.subscriptions.push(remoteService)
-  connectionService.setRemoteService(remoteService)
+  // Only available with testagent backend (depends on kilo-specific remote.* API)
+  const remoteService = isTestagent() ? new RemoteStatusService() : null
+  if (remoteService) {
+    context.subscriptions.push(remoteService)
+    connectionService.setRemoteService(remoteService)
+  }
 
   // Re-register browser automation MCP server on CLI backend reconnect, configure telemetry,
   // set remote service client, and reload autocomplete so it picks up the now-available backend connection.
   const unsubscribeStateChange = connectionService.onStateChange((state) => {
     if (state === "connected") {
       browserAutomationService.reregisterIfEnabled()
-      const config = connectionService.getServerConfig()
-      if (config) {
-        telemetry.configure(config.baseUrl, config.password)
+      if (telemetry) {
+        const config = connectionService.getServerConfig()
+        if (config) {
+          telemetry.configure(config.baseUrl, config.password)
+        }
       }
-      try {
-        remoteService.setClient(connectionService.getClient())
-        console.log("[TestAgent New] CLI connected, calling remoteService.refresh()")
-        remoteService.refresh().catch((err) => console.warn("[TestAgent New] initial remote refresh failed:", err))
-      } catch {
-        remoteService.setClient(null)
+      if (remoteService) {
+        try {
+          remoteService.setClient(connectionService.getClient())
+          console.log("[TestAgent New] CLI connected, calling remoteService.refresh()")
+          remoteService.refresh().catch((err) => console.warn("[TestAgent New] initial remote refresh failed:", err))
+        } catch {
+          remoteService.setClient(null)
+        }
       }
       AutocompleteServiceManager.getInstance()?.load()
     } else {
-      remoteService.clearState()
-      remoteService.setClient(null)
+      if (remoteService) {
+        remoteService.clearState()
+        remoteService.setClient(null)
+      }
     }
   })
 
@@ -88,7 +98,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Create the provider with shared service
   const provider = new KiloProvider(context.extensionUri, connectionService, context)
-  provider.setRemoteService(remoteService)
+  if (remoteService) provider.setRemoteService(remoteService)
 
   // Register the webview view provider for the sidebar.
   // retainContextWhenHidden keeps the webview alive when switching to other sidebar panels.
@@ -156,7 +166,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.window.registerWebviewPanelSerializer("testagent.new.TabPanel", {
       deserializeWebviewPanel(panel: vscode.WebviewPanel) {
         const tabProvider = new KiloProvider(context.extensionUri, connectionService, context)
-        tabProvider.setRemoteService(remoteService)
+        if (remoteService) tabProvider.setRemoteService(remoteService)
         tabProvider.setContinueInWorktreeHandler((sessionId, progress) =>
           agentManagerProvider.continueFromSidebar(sessionId, progress),
         )
@@ -192,7 +202,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Create settings/profile editor provider (opens in editor area, not sidebar)
   const settingsEditorProvider = new SettingsEditorProvider(context.extensionUri, connectionService, context)
-  settingsEditorProvider.setRemoteService(remoteService)
+  if (remoteService) settingsEditorProvider.setRemoteService(remoteService)
   context.subscriptions.push(settingsEditorProvider)
 
   // Create sub-agent viewer provider (read-only editor panel for sub-agent sessions)
@@ -541,7 +551,7 @@ async function openKiloInNewTab(
   }
 
   const tabProvider = new KiloProvider(context.extensionUri, connectionService, context)
-  tabProvider.setRemoteService(remoteService)
+  if (remoteService) tabProvider.setRemoteService(remoteService)
   tabProvider.setContinueInWorktreeHandler((sessionId, progress) =>
     agentManagerProvider.continueFromSidebar(sessionId, progress),
   )

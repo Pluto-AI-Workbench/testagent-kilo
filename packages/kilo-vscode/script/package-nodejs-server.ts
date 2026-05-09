@@ -1,0 +1,109 @@
+#!/usr/bin/env bun
+/**
+ * Package the kilo-vscode extension with Node.js backend.
+ *
+ * This script:
+ * 1. Builds the nodejs-server dist from testagent-core
+ * 2. Copies the dist into kilo-vscode/nodejs-server/
+ * 3. Installs node_modules for the nodejs-server (node-pty native bindings)
+ * 4. Runs the extension build with BACKEND_RUNTIME=opencode
+ * 5. Packages the VSIX
+ *
+ * Usage:
+ *   bun script/package-nodejs-server.ts [--skip-server-build] [--skip-vsix]
+ */
+
+import { $ } from "bun"
+import { join } from "node:path"
+import { existsSync } from "node:fs"
+import { promises as fs } from "node:fs"
+
+const ROOT = join(import.meta.dir, "..")
+const TESTAGENT_CORE = join(ROOT, "..", "testagent-core")
+const SERVER_PKG = join(TESTAGENT_CORE, "packages", "nodejs-server")
+const TARGET = join(ROOT, "nodejs-server")
+
+const skipBuild = process.argv.includes("--skip-server-build")
+const skipVsix = process.argv.includes("--skip-vsix")
+
+// Step 1: Build nodejs-server
+if (!skipBuild) {
+  console.log("Step 1: Building nodejs-server...")
+  await $`cd ${SERVER_PKG} && bun run build`
+} else {
+  console.log("Step 1: Skipping server build (--skip-server-build)")
+}
+
+const serverDist = join(SERVER_PKG, "dist")
+if (!existsSync(serverDist)) {
+  console.error(`Error: nodejs-server dist not found at ${serverDist}`)
+  console.error("Run without --skip-server-build to build it first")
+  process.exit(1)
+}
+
+// Step 2: Copy dist to kilo-vscode/nodejs-server/
+console.log("Step 2: Copying nodejs-server dist...")
+await fs.rm(TARGET, { recursive: true, force: true })
+await fs.mkdir(TARGET, { recursive: true })
+await fs.cp(serverDist, TARGET, { recursive: true })
+
+// Step 3: Install dependencies (for native node-pty bindings)
+console.log("Step 3: Installing nodejs-server dependencies...")
+
+// First install base dependencies
+await $`cd ${TARGET} && npm install --omit=dev`
+
+// npm refuses to install optionalDependencies for other platforms
+// Workaround: temporarily move them to regular dependencies
+console.log("Step 3.1: Patching package.json to force cross-platform installs...")
+const pkgJsonPath = join(TARGET, "package.json")
+const pkgJson = JSON.parse(await fs.readFile(pkgJsonPath, "utf8"))
+const optDeps = pkgJson.optionalDependencies || {}
+pkgJson.dependencies = { ...pkgJson.dependencies, ...optDeps }
+delete pkgJson.optionalDependencies
+await fs.writeFile(pkgJsonPath, JSON.stringify(pkgJson, null, 2))
+
+// Now install all platform binaries
+console.log("Step 3.2: Installing platform-specific node-pty binaries...")
+await $`cd ${TARGET} && npm install --force`
+
+// Restore original package.json structure
+pkgJson.optionalDependencies = optDeps
+for (const key of Object.keys(optDeps)) {
+  delete pkgJson.dependencies[key]
+}
+await fs.writeFile(pkgJsonPath, JSON.stringify(pkgJson, null, 2))
+
+// Verify critical platform packages were installed
+console.log("Step 3.3: Verifying platform binaries...")
+const requiredPlatforms = ["darwin-arm64", "darwin-x64", "linux-x64", "win32-x64"]
+const missing = []
+for (const platform of requiredPlatforms) {
+  const pkgPath = join(TARGET, "node_modules", `@lydell/node-pty-${platform}`)
+  if (!existsSync(pkgPath)) {
+    missing.push(platform)
+  } else {
+    console.log(`  ✓ node-pty-${platform}`)
+  }
+}
+if (missing.length > 0) {
+  console.error(`❌ Error: Missing node-pty binaries for: ${missing.join(", ")}`)
+  console.error("   Extension will not work on these platforms!")
+  process.exit(1)
+}
+
+// Step 4: Build extension with opencode backend
+if (!skipVsix) {
+  console.log("Step 4: Building extension with BACKEND_RUNTIME=opencode...")
+  await $`cd ${ROOT} && BACKEND_RUNTIME=opencode node esbuild.js --production`
+
+  // Step 5: Package VSIX
+  console.log("Step 5: Packaging VSIX...")
+  await $`cd ${ROOT} && npx @vscode/vsce package --no-dependencies -o testagent-nodejs-tscode.vsix`
+}
+
+console.log("\n✅ Node.js Server VSIX build complete!")
+console.log(`   Server dir: ${TARGET}`)
+if (!skipVsix) {
+  console.log(`   VSIX: ${join(ROOT, "testagent-nodejs-tscode.vsix")}`)
+}
