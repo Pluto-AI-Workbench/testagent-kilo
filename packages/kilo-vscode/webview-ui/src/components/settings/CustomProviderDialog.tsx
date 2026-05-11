@@ -69,7 +69,7 @@ const CustomProviderDialog = (props: CustomProviderDialogProps) => {
     const entries = Object.entries(cfg.models)
     if (entries.length === 0) return [{ id: "", name: "", reasoning: false, variants: [], limit: undefined }] // testagent_change
     return entries.map(([id, m]) => {
-      const raw = m as { name?: string; reasoning?: boolean; variants?: Record<string, Record<string, unknown>>; limit?: { context?: number; input?: number; output?: number } } // testagent_change
+      const raw = m as { name?: string; reasoning?: boolean; variants?: Record<string, Record<string, unknown>>; limit?: { context?: number } } // testagent_change
       const variants: VariantEntry[] = Object.entries(raw?.variants ?? {}).map(([vname, vcfg]) => ({
         name: vname,
         enableThinking: typeof vcfg.enable_thinking === "boolean" ? (vcfg.enable_thinking as boolean) : undefined,
@@ -538,30 +538,6 @@ const CustomProviderDialog = (props: CustomProviderDialogProps) => {
                       })
                     } else if (!isNaN(num)) {
                       setForm("models", i(), "limit", (prev) => ({ ...prev, context: num }))
-                    }
-                  }}
-                  onChangeLimitInput={(val) => {
-                    const num = val.trim() === "" ? undefined : parseInt(val, 10)
-                    if (num === undefined) {
-                      setForm("models", i(), "limit", (prev) => {
-                        if (!prev) return undefined
-                        const { input, ...rest } = prev
-                        return Object.keys(rest).length === 0 ? undefined : rest
-                      })
-                    } else if (!isNaN(num)) {
-                      setForm("models", i(), "limit", (prev) => ({ ...prev, input: num }))
-                    }
-                  }}
-                  onChangeLimitOutput={(val) => {
-                    const num = val.trim() === "" ? undefined : parseInt(val, 10)
-                    if (num === undefined) {
-                      setForm("models", i(), "limit", (prev) => {
-                        if (!prev) return undefined
-                        const { output, ...rest } = prev
-                        return Object.keys(rest).length === 0 ? undefined : rest
-                      })
-                    } else if (!isNaN(num)) {
-                      setForm("models", i(), "limit", (prev) => ({ ...prev, output: num }))
                     }
                   }}
                 />

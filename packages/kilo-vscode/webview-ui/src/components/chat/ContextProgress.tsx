@@ -31,26 +31,22 @@ export const ContextProgress: Component = () => {
     const sel = session.selected()
     const model = sel ? provider.findModel(sel) : undefined
     const limit = model?.limit?.context ?? model?.contextLength ?? 0
-    const output = model?.limit?.output ?? 0
 
     if (limit === 0) return undefined
 
     const used = Math.min(usage.tokens, limit)
-    const reserved = Math.min(output, limit - used)
-    const available = Math.max(0, limit - used - reserved)
+    const available = Math.max(0, limit - used)
 
     const pctUsed = (used / limit) * 100
-    const pctReserved = (reserved / limit) * 100
     const pctAvail = (available / limit) * 100
 
-    return { used, reserved, available, limit, pctUsed, pctReserved, pctAvail, output }
+    return { used, available, limit, pctUsed, pctAvail }
   })
 
   const tip = createMemo(() => {
     const d = data()
     if (!d) return ""
     const lines = [`${fmt(d.used)} / ${fmt(d.limit)} tokens used`]
-    if (d.output > 0) lines.push(`${fmt(d.output)} reserved for output`)
     if (d.available > 0) lines.push(`${fmt(d.available)} available`)
     return lines.join("\n")
   })
@@ -67,7 +63,6 @@ export const ContextProgress: Component = () => {
                 classList={{ "context-progress-used--hot": d().pctUsed >= 50 }}
                 style={{ width: `${d().pctUsed}%` }}
               />
-              <div class="context-progress-reserved" style={{ width: `${d().pctReserved}%` }} />
               <Show when={d().pctAvail > 0}>
                 <div class="context-progress-available" style={{ width: `${d().pctAvail}%` }} />
               </Show>

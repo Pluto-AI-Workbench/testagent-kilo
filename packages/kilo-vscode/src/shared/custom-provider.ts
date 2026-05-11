@@ -76,7 +76,7 @@ export type SanitizedProviderConfig = {
       reasoning?: true
       variants?: Record<string, VariantConfig>
       // testagent_change start: add limit field
-      limit?: { context?: number; input?: number; output?: number }
+      limit?: { context?: number }
       // testagent_change end
     }
   >
@@ -146,11 +146,8 @@ export function normalizeCustomProviderConfig(
     },
     models: Object.fromEntries(
       Object.entries(config.models).map(([id, model]) => {
-        // testagent_change start: only include limit if it has at least context or output
-        const limit =
-          model.limit && (model.limit.context !== undefined || model.limit.output !== undefined)
-            ? model.limit
-            : undefined
+        // testagent_change start: only include limit if it has context
+        const limit = model.limit && model.limit.context !== undefined ? model.limit : undefined
         // testagent_change end
 
         return [

@@ -122,12 +122,6 @@ function serializeModel(m: ModelEntry): [string, Record<string, unknown>] {
     if (m.limit.context !== undefined && m.limit.context !== null && !Number.isNaN(m.limit.context)) {
       limit.context = m.limit.context
     }
-    if (m.limit.input !== undefined && m.limit.input !== null && !Number.isNaN(m.limit.input)) {
-      limit.input = m.limit.input
-    }
-    if (m.limit.output !== undefined && m.limit.output !== null && !Number.isNaN(m.limit.output)) {
-      limit.output = m.limit.output
-    }
     // Only include limit if at least one field was added
     if (Object.keys(limit).length > 0) {
       entry.limit = limit

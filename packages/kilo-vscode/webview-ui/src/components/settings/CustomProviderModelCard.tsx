@@ -233,8 +233,6 @@ type ModelCardProps = {
   onChangeVariantChatTemplateArgs: (vi: number, val: ChatTemplateArgsValue) => void
   // testagent_change start: Add limit change handlers
   onChangeLimitContext: (val: string) => void
-  onChangeLimitInput: (val: string) => void
-  onChangeLimitOutput: (val: string) => void
   // testagent_change end
 }
 
@@ -288,30 +286,12 @@ export function ModelCard(props: ModelCardProps) {
         <div style={{ flex: 1 }}>
           <TextField
             type="number"
-            label="Context Limit"
+            label="Context Limit (不填或为0则不自动压缩)"
             placeholder="请输入"
             value={props.m.limit?.context?.toString() ?? ""}
             onChange={props.onChangeLimitContext}
           />
-        </div>
-        <div style={{ flex: 1 }}>
-          <TextField
-            type="number"
-            label="Input Limit (Optional)"
-            placeholder="请输入"
-            value={props.m.limit?.input?.toString() ?? ""}
-            onChange={props.onChangeLimitInput}
-          />
-        </div>
-        <div style={{ flex: 1 }}>
-          <TextField
-            type="number"
-            label="Output Limit"
-            placeholder="请输入"
-            value={props.m.limit?.output?.toString() ?? ""}
-            onChange={props.onChangeLimitOutput}
-          />
-        </div>
+        </div>        
       </div>
       {/* testagent_change end */}
 

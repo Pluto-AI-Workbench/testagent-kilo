@@ -346,7 +346,7 @@ export interface ProviderModel {
   releaseDate?: string
   latest?: boolean
   // Actual shape returned by the server (Provider.Model)
-  limit?: { context: number; input?: number; output: number }
+  limit?: { context: number }
   variants?: Record<string, Record<string, unknown>>
   capabilities?: {
     reasoning: boolean
