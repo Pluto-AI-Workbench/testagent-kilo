@@ -616,6 +616,23 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
           )
           break
         }
+        // plutoagent_change start
+        case "testflowNew": {
+          this.handleTestflowNew().catch((e) =>
+            console.error("[PlutoAgent] handleTestflowNew failed:", e),
+          )
+          break
+        }
+        // plutoagent_change end
+        // testagent_change start
+        case "sdtNew": {
+          console.log("[TestAgent] SDT: Received sdtNew message, taskName:", message.taskName)
+          this.handleSdtNew(message.taskName).catch((e) =>
+            console.error("[TestAgent] handleSdtNew failed:", e),
+          )
+          break
+        }
+        // testagent_change end
         case "abort":
           this.cancelRetry(message.sessionID ?? "")
           await this.handleAbort(message.sessionID, parseQueued(message.queuedMessageIDs))
@@ -2574,6 +2591,16 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     variant?: string,
     files?: MessageFile[],
   ): Promise<void> {
+    // testagent_change start - 解析 /sdt-new 斜杠命令
+    if (text.startsWith("/sdt-new ")) {
+      const taskName = text.replace("/sdt-new ", "").trim()
+      if (taskName) {
+        await this.handleSdtNew(taskName)
+        return
+      }
+    }
+    // testagent_change end
+
     if (!this.client) {
       this.postMessage({
         type: "sendMessageFailed",
@@ -2822,6 +2849,155 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       })
     }
   }
+
+  // plutoagent_change start
+  private async handleTestflowNew(): Promise<void> {
+    if (!this.client) {
+      this.postMessage({
+        type: "sendMessageFailed",
+        error: "Not connected to CLI backend",
+      })
+      return
+    }
+
+    try {
+      // 1. 创建 C:\code\test-demo 目录
+      const fs = await import("node:fs")
+      const dir = "C:\\code\\test-demo"
+      fs.mkdirSync(dir, { recursive: true })
+
+      // 2. 创建以当前时间命名的 txt 文件
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+      const filePath = `${dir}\\${timestamp}.txt`
+      fs.writeFileSync(filePath, "TestFlow plugin triggered")
+
+      console.log("[PlutoAgent] TestFlow: Created directory and file:", filePath)
+
+      // 3. 获取当前会话 ID
+      const sessionID = this.currentSession?.id
+      if (!sessionID) {
+        this.postMessage({
+          type: "sendMessageFailed",
+          error: "No active session. Please start a conversation first.",
+        })
+        return
+      }
+
+      const workspaceDir = this.getWorkspaceDirectory(sessionID)
+
+      // 4. 调用 session.command 发送命令到 opencode
+      // template 的 prompt 不会显示在聊天框中，只会显示命令名称和 AI 响应
+      await this.client.session.command({
+        sessionID,
+        directory: workspaceDir,
+        command: "testflow",
+        arguments: "new",
+      })
+
+      console.log("[PlutoAgent] TestFlow: Command sent successfully")
+    } catch (error) {
+      console.error("[PlutoAgent] TestFlow failed:", error)
+      this.postMessage({
+        type: "error",
+        message: `TestFlow failed: ${error instanceof Error ? error.message : String(error)}`,
+      })
+    }
+  }
+  // plutoagent_change end
+
+  // testagent_change start
+  private async handleSdtNew(taskName: string): Promise<void> {
+    console.log("[TestAgent] SDT: handleSdtNew called with taskName:", taskName)
+
+    if (!this.client) {
+      console.log("[TestAgent] SDT: No client connected")
+      this.postMessage({
+        type: "sendMessageFailed",
+        error: "Not connected to CLI backend",
+      })
+      return
+    }
+
+    if (!taskName) {
+      console.log("[TestAgent] SDT: No task name provided")
+      this.postMessage({
+        type: "sendMessageFailed",
+        error: "Task name is required. Usage: /sdt-new <taskname>",
+      })
+      return
+    }
+
+    try {
+      // 1. 调用 TaskScaffolder 创建任务目录
+      console.log("[TestAgent] SDT: Importing TaskScaffolder...")
+      const { TaskScaffolder } = await import("@testagent/testflow")
+      const targetDir = this.getWorkspaceDirectory() || "C:\\code"
+      console.log("[TestAgent] SDT: Creating task directory in:", targetDir)
+      const taskDir = TaskScaffolder.create({
+        taskName,
+        targetDir,
+      })
+
+      console.log("[TestAgent] SDT: Created task directory:", taskDir)
+
+      // 2. 使用 resolveSession 获取会话（与 handleSendMessage 一致）
+      console.log("[TestAgent] SDT: Resolving session...")
+      const resolved = await this.resolveSession()
+      if (!resolved) {
+        console.log("[TestAgent] SDT: Failed to resolve session")
+        this.postMessage({
+          type: "sendMessageFailed",
+          error: "Failed to resolve session",
+        })
+        return
+      }
+      const sid = resolved.sid
+      const dir = resolved.dir
+      console.log("[TestAgent] SDT: Session resolved, sid:", sid, "dir:", dir)
+
+      // 3. 发送消息给 AI，让它读取 Skill 文件并执行
+      const prompt = `测试任务 "${taskName}" 已创建完成。
+
+任务目录：${taskDir}
+目录结构：
+- skill/           # Skill 提示词文件
+- template/        # 产物模板文件
+- config.yaml      # 流程配置
+- stage_artifacts.yaml  # 产物定义
+- testflow_memory.yaml  # 框架记忆
+
+请执行以下操作：
+1. 读取 ${taskDir}/skill/demand_clarify_skill.md 文件
+2. 根据文件中的提示词执行测试需求澄清任务
+3. 将产物保存到 ${taskDir}/artifact/demand_clarify/ 目录`
+
+      const messageID = `sdt-${Date.now()}`
+      console.log("[TestAgent] SDT: Sending prompt to AI, messageID:", messageID)
+
+      await runWithMessageConfirmation(this.confirmations, messageID, " SDT request", () =>
+        this.withRetry(
+          () =>
+            this.client!.session.promptAsync({
+              sessionID: sid,
+              directory: dir,
+              messageID,
+              parts: [{ type: "text", text: prompt }],
+            }),
+          sid,
+          messageID,
+        ),
+      )
+
+      console.log("[TestAgent] SDT: Prompt sent successfully")
+    } catch (error) {
+      console.error("[TestAgent] SDT failed:", error)
+      this.postMessage({
+        type: "error",
+        message: `SDT failed: ${error instanceof Error ? error.message : String(error)}`,
+      })
+    }
+  }
+  // testagent_change end
 
   // Permission + question handlers extracted to kilo-provider/handlers/permission.ts and question.ts
 

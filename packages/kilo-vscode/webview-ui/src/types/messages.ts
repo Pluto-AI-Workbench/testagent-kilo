@@ -2344,6 +2344,19 @@ export interface RestartServerRequest {
   type: "restartServer"
 }
 
+// plutoagent_change start
+export interface TestflowNewRequest {
+  type: "testflowNew"
+}
+// plutoagent_change end
+
+// testagent_change start
+export interface SdtNewRequest {
+  type: "sdtNew"
+  taskName: string
+}
+// testagent_change end
+
 // Open a sub-agent session in a read-only editor panel
 export interface OpenSubAgentViewerRequest {
   type: "openSubAgentViewer"
@@ -2690,6 +2703,12 @@ export type WebviewMessage =
   | MoveToSectionRequest
   | MoveSectionRequest
   | RestartServerRequest
+  // plutoagent_change start
+  | TestflowNewRequest
+  // plutoagent_change end
+  // testagent_change start
+  | SdtNewRequest
+  // testagent_change end
 
 // ============================================
 // VS Code API type

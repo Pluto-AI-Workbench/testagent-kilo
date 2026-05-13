@@ -1,0 +1,16 @@
+{
+  "name": "testflow-demo",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/plugin/index.js",
+  "exports": {
+    ".": "./dist/plugin/index.js",
+    "./plugin": "./dist/plugin/index.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  },
+  "scripts": {
+    "build": "tsc"
+  }
+}

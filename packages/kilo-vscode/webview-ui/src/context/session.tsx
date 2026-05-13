@@ -1746,6 +1746,21 @@ export const SessionProvider: ParentComponent = (props) => {
       return
     }
 
+    // testagent_change start - 拦截 /sdt-new，转为 sdtNew 消息
+    if (command === "sdt-new") {
+      const taskName = args.trim()
+      console.log("[TestAgent] SDT: Intercepted /sdt-new command, taskName:", taskName)
+      if (taskName) {
+        const messageID = Identifier.ascending("message")
+        const sid = currentSessionID()
+        if (sid) addOptimistic(sid, messageID, `/sdt-new ${taskName}`, files)
+        vscode.postMessage({ type: "sdtNew", taskName })
+        console.log("[TestAgent] SDT: Posted sdtNew message to extension")
+      }
+      return
+    }
+    // testagent_change end
+
     // Cloud previews need import-then-command; post importAndSend with command metadata
     const preview = cloudPreviewId()
     if (preview) {

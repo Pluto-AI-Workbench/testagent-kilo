@@ -143,6 +143,32 @@ export function useSlashCommand(vscode: VSCodeContext, exclude?: Set<string>): S
       action: openLangfuseTrace,
     },
     // testagent_change end
+    // plutoagent_change start
+    {
+      name: "testflow",
+      description: "TestFlow 插件命令",
+      hints: ["new", "init", "run"],
+      action: () => {
+        vscode.postMessage({ type: "testflowNew" })
+      },
+    },
+    {
+      name: "testflow compact",
+      description: "TestFlow 压缩当前会话",
+      hints: ["smol", "condense"],
+      action: () => {
+        sessionCtx.compact()
+      },
+    },
+    // plutoagent_change end
+    // testagent_change start
+    {
+      name: "sdt-new",
+      description: "创建新的测试任务",
+      hints: ["task", "testflow"],
+      // 不设置 action，让用户输入完整命令
+    },
+    // testagent_change end
   ]
 
   const client = exclude ? all.filter((c) => !exclude.has(c.name)) : all
