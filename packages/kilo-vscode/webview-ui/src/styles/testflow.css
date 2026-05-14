@@ -1,0 +1,102 @@
+/* testagent_change - new file */
+
+.testflow-panel {
+  margin: 8px 12px;
+  padding: 12px;
+  border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+  border-radius: 6px;
+  background: var(--vscode-editor-background);
+  font-size: 13px;
+}
+
+.testflow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.testflow-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.testflow-status.testflow-running {
+  color: var(--vscode-progressBar-background, #0078d4);
+}
+
+.testflow-status.testflow-error {
+  color: var(--vscode-errorForeground, #f48771);
+}
+
+.testflow-steps {
+  margin: 8px 0;
+  padding-left: 4px;
+}
+
+.testflow-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--vscode-foreground);
+}
+
+.testflow-step[data-status="complete"] {
+  color: var(--vscode-testing-iconPassed, #73c991);
+}
+
+.testflow-step[data-status="exception"] {
+  color: var(--vscode-errorForeground, #f48771);
+}
+
+.testflow-agent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  color: var(--vscode-progressBar-background, #0078d4);
+  font-size: 12px;
+}
+
+.testflow-question {
+  margin: 8px 0;
+  padding: 12px;
+  border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+  border-radius: 4px;
+  background: var(--vscode-inputBackground);
+}
+
+.testflow-question-header {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.testflow-question-body {
+  margin-bottom: 8px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.testflow-question-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.testflow-question-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.testflow-summary {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 4px;
+  background: var(--vscode-textBlockQuote-background, rgba(255, 255, 255, 0.04));
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}

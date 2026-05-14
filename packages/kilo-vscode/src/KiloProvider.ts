@@ -62,6 +62,9 @@ import { handleForkSession } from "./kilo-provider/fork-session"
 import { retryable, backoff, MAX_RETRIES } from "./util/retry"
 import { hasGit } from "./kilo-provider/git-status"
 import { exec } from "./util/process"
+// testagent_change start - testflow integration
+import { SdtRunner } from "./testagent/sdt-runner"
+// testagent_change end
 // legacy-migration start
 import {
   checkAndShowMigrationWizard,
@@ -204,6 +207,9 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
   private unsubscribeDirectoryProvider: (() => void) | null = null
   private initConnectionPromise: Promise<void> | null = null
   private webviewMessageDisposable: vscode.Disposable | null = null
+  // testagent_change start - testflow integration
+  private readonly sdtRunner = new SdtRunner()
+  // testagent_change end
   private viewStateDisposable: vscode.Disposable | null = null
   private visibilityDisposable: vscode.Disposable | null = null
 
@@ -622,6 +628,17 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
           this.cancelRetry(message.sessionID ?? "")
           await this.handleAbort(message.sessionID, parseQueued(message.queuedMessageIDs))
           break
+        // testagent_change start - testflow message handlers
+        case "testflow.questionReply":
+          this.sdtRunner.reply(message.id, message.answers)
+          break
+        case "testflow.questionReject":
+          this.sdtRunner.reject(message.id)
+          break
+        case "testflow.abort":
+          this.sdtRunner.abort()
+          break
+        // testagent_change end
         case "revertSession":
           this.handleRevertSession(message.sessionID, message.messageID).catch((e) =>
             console.error("[TestAgent] handleRevertSession failed:", e),
@@ -2692,6 +2709,36 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     }
   }
 
+  // testagent_change start - testflow command handler
+  private async handleSdtCommand(text: string, sessionID?: string): Promise<void> {
+    const parts = text.trim().split(/\s+/)
+    const cmd = parts[0].slice(5) // strip "/sdt-"
+    const args = parts.slice(1)
+
+    const serverConfig = this.connectionService.getServerConfig()
+    if (!serverConfig) {
+      this.postMessage({ type: "testflow.error", sessionID: sessionID ?? "", error: "Not connected to CLI backend" })
+      return
+    }
+
+    const sid = sessionID ?? this.currentSession?.id ?? ""
+    const workspaceDir = this.getContextDirectory()
+
+    this.sdtRunner.run({
+      cmd,
+      args,
+      cwd: workspaceDir,
+      env: {
+        OPENCODE_SERVER_URL: serverConfig.baseUrl,
+        OPENCODE_SERVER_PASSWORD: serverConfig.password,
+        OPENCODE_SESSION_ID: sid,
+      },
+      sessionID: sid,
+      post: (msg) => this.postMessage(msg),
+    })
+  }
+  // testagent_change end
+
   private async handleSendMessage(
     text: string,
     messageID?: string,
@@ -2703,6 +2750,13 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     variant?: string,
     files?: MessageFile[],
   ): Promise<void> {
+    // testagent_change start - intercept /sdt-* commands for testflow
+    if (text.startsWith("/sdt-")) {
+      await this.handleSdtCommand(text, sessionID)
+      return
+    }
+    // testagent_change end
+
     if (!this.client) {
       this.postMessage({
         type: "sendMessageFailed",

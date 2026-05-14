@@ -31,6 +31,9 @@ registerVscodeToolOverrides()
 import HistoryView from "./components/history/HistoryView"
 import { MigrationWizard } from "./components/migration" // legacy-migration
 import { NotificationsProvider } from "./context/notifications"
+// testagent_change start - testflow integration
+import { TestflowProvider } from "./context/testflow"
+// testagent_change end
 import type { Message as SDKMessage, Part as SDKPart } from "@kilocode/sdk/v2"
 import "./styles/chat.css"
 
@@ -305,9 +308,15 @@ const App: Component = () => {
                         <ConfigProvider>
                           <NotificationsProvider>
                             <SessionProvider>
+                              {/* testagent_change start - testflow integration */}
+                              <TestflowProvider>
+                              {/* testagent_change end */}
                               <DataBridge>
                                 <AppContent />
                               </DataBridge>
+                              {/* testagent_change start - testflow integration */}
+                              </TestflowProvider>
+                              {/* testagent_change end */}
                             </SessionProvider>
                           </NotificationsProvider>
                         </ConfigProvider>

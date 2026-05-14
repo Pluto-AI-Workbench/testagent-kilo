@@ -142,6 +142,11 @@ export function useSlashCommand(vscode: VSCodeContext, exclude?: Set<string>): S
       hints: ["trace", "debug"],
       action: openLangfuseTrace,
     },
+    {
+      name: "sdt-new",
+      description: "启动测试流程 - 创建新任务",
+      hints: ["testflow", "new task"],
+    },
     // testagent_change end
   ]
 
