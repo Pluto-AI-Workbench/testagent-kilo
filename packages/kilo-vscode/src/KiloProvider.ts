@@ -2834,6 +2834,13 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     variant?: string,
     files?: MessageFile[],
   ): Promise<void> {
+    // testagent_change start - intercept sdt-* commands for testflow
+    if (command.startsWith("sdt-")) {
+      await this.handleSdtCommand(`/${command} ${args}`.trim(), sessionID)
+      return
+    }
+    // testagent_change end
+
     // testagent_change start - Check CLI connection status
     console.log("[TestAgent] 🔍 handleSendCommand called:", {
       command,

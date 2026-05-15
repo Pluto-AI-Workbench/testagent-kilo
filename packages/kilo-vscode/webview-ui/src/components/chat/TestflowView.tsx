@@ -17,15 +17,15 @@ export const TestflowView: Component = () => {
             <Show when={s().error} fallback={
               <span class="testflow-status">
                 <Show when={s().exitCode === 0} fallback={
-                  <Icon name="x-circle" size="small" />
+                  <Icon name="circle-x" size="small" />
                 }>
-                  <Icon name="check-circle" size="small" />
+                  <Icon name="circle-check" size="small" />
                 </Show>
                 {" "}Testflow {s().exitCode === 0 ? "完成" : "失败"}
               </span>
             }>
               <span class="testflow-status testflow-error">
-                <Icon name="alert-triangle" size="small" /> 错误: {s().error}
+                <Icon name="warning" size="small" /> 错误: {s().error}
               </span>
             </Show>
           }>
@@ -47,7 +47,7 @@ export const TestflowView: Component = () => {
                 <div class="testflow-step" data-status={step.status}>
                   <Show when={step.status === "start"} fallback={
                     <Show when={step.status === "complete"} fallback={
-                      <Icon name="alert-triangle" size="small" />
+                      <Icon name="warning" size="small" />
                     }>
                       <Icon name="check" size="small" />
                     </Show>

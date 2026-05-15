@@ -34,6 +34,7 @@ export class SdtRunner {
       cwd: opts.cwd,
       env: { ...process.env, ...opts.env, KILO_INTEGRATION: "1" },
       stdio: ["pipe", "pipe", "pipe"],
+      shell: process.platform === "win32",
     })
 
     const rl = readline.createInterface({ input: this.proc.stdout!, terminal: false })
