@@ -2372,6 +2372,16 @@ export interface RestartServerRequest {
   logLevel?: "DEBUG" | "INFO" | "WARN" | "ERROR"
 }
 
+// testagent_change start - reload commands
+export interface ReloadSkillsRequest {
+  type: "reloadSkills"
+}
+
+export interface ReloadMcpRequest {
+  type: "reloadMcp"
+}
+// testagent_change end
+
 // Open a sub-agent session in a read-only editor panel
 export interface OpenSubAgentViewerRequest {
   type: "openSubAgentViewer"
@@ -2719,6 +2729,8 @@ export type WebviewMessage =
   | MoveToSectionRequest
   | MoveSectionRequest
   | RestartServerRequest
+  | ReloadSkillsRequest // testagent_change
+  | ReloadMcpRequest // testagent_change
   | ResolveShellPathMessage
 
 // ============================================

@@ -881,6 +881,14 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
         case "restartServer":
           void this.handleRestartServer(message.logLevel)
           break
+        // testagent_change start - reload commands
+        case "reloadSkills":
+          void vscode.commands.executeCommand("testagent.new.reloadSkills")
+          break
+        case "reloadMcp":
+          void vscode.commands.executeCommand("testagent.new.reloadMcp")
+          break
+        // testagent_change end
         case "deleteSession":
           await this.handleDeleteSession(message.sessionID)
           break
