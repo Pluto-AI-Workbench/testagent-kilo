@@ -10,7 +10,7 @@ export const TestflowView: Component = () => {
   const s = tf.state
 
   return (
-    <Show when={s().running || s().done || s().error}>
+    <Show when={s().running || s().done || s().error || s().question || s().logs.length > 0}>
       <div class="testflow-panel" data-component="testflow-panel">
         <div class="testflow-header">
           <Show when={s().running} fallback={
