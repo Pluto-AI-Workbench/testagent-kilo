@@ -100,3 +100,30 @@
   color: var(--vscode-descriptionForeground);
   font-size: 12px;
 }
+
+.testflow-logs {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 4px;
+  background: var(--vscode-textBlockQuote-background, rgba(255, 255, 255, 0.04));
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.testflow-log {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  color: var(--vscode-foreground);
+}
+
+.testflow-log[data-level="error"] {
+  color: var(--vscode-errorForeground, #f48771);
+}
+
+.testflow-log-prefix {
+  color: var(--vscode-descriptionForeground);
+  flex-shrink: 0;
+}

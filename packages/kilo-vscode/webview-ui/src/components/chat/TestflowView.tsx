@@ -96,6 +96,19 @@ export const TestflowView: Component = () => {
         <Show when={s().summary}>
           <div class="testflow-summary">{s().summary}</div>
         </Show>
+
+        <Show when={s().logs.length > 0}>
+          <div class="testflow-logs">
+            <For each={s().logs}>
+              {(log) => (
+                <div class="testflow-log" data-level={log.level}>
+                  <span class="testflow-log-prefix">{log.level === "error" ? "!" : ">"}</span>
+                  <span class="testflow-log-message">{log.message}</span>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
       </div>
     </Show>
   )
