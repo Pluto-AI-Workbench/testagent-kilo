@@ -63,7 +63,7 @@ import { retryable, backoff, MAX_RETRIES } from "./util/retry"
 import { hasGit } from "./kilo-provider/git-status"
 import { exec } from "./util/process"
 // testagent_change start - testflow integration
-import { SdtRunner, SdtTestRunner } from "./testagent/sdt-runner"
+import { SdtRunner } from "./testagent/sdt-runner"
 // testagent_change end
 // legacy-migration start
 import {
@@ -2753,10 +2753,9 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     const sid = sessionID ?? this.currentSession?.id ?? ""
     const workspaceDir = this.getContextDirectory()
 
-    const testRunner = new SdtTestRunner()
-    testRunner.run({
-      cmd: args[0],
-      args: args.slice(1),
+    this.sdtRunner.run({
+      cmd: "test",
+      args,
       cwd: workspaceDir,
       env: {
         OPENCODE_SERVER_URL: serverConfig.baseUrl,
