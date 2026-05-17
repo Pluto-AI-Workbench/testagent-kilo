@@ -63,7 +63,7 @@ import { retryable, backoff, MAX_RETRIES } from "./util/retry"
 import { hasGit } from "./kilo-provider/git-status"
 import { exec } from "./util/process"
 // testagent_change start - testflow integration
-import { SdtRunner } from "./testagent/sdt-runner"
+import { SdtRunner, SdtTestRunner } from "./testagent/sdt-runner"
 // testagent_change end
 // legacy-migration start
 import {
@@ -2715,6 +2715,11 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     const cmd = parts[0].slice(5) // strip "/sdt-"
     const args = parts.slice(1)
 
+    if (cmd === "test") {
+      await this.handleSdtTestCommand(args, sessionID)
+      return
+    }
+
     const serverConfig = this.connectionService.getServerConfig()
     if (!serverConfig) {
       this.postMessage({ type: "testflow.error", sessionID: sessionID ?? "", error: "Not connected to CLI backend" })
@@ -2727,6 +2732,31 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     this.sdtRunner.run({
       cmd,
       args,
+      cwd: workspaceDir,
+      env: {
+        OPENCODE_SERVER_URL: serverConfig.baseUrl,
+        OPENCODE_SERVER_PASSWORD: serverConfig.password,
+        OPENCODE_SESSION_ID: sid,
+      },
+      sessionID: sid,
+      post: (msg) => this.postMessage(msg),
+    })
+  }
+
+  private async handleSdtTestCommand(args: string[], sessionID?: string): Promise<void> {
+    const serverConfig = this.connectionService.getServerConfig()
+    if (!serverConfig) {
+      this.postMessage({ type: "testflow.error", sessionID: sessionID ?? "", error: "Not connected to CLI backend" })
+      return
+    }
+
+    const sid = sessionID ?? this.currentSession?.id ?? ""
+    const workspaceDir = this.getContextDirectory()
+
+    const testRunner = new SdtTestRunner()
+    testRunner.run({
+      cmd: args[0],
+      args: args.slice(1),
       cwd: workspaceDir,
       env: {
         OPENCODE_SERVER_URL: serverConfig.baseUrl,

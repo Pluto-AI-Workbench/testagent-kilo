@@ -147,6 +147,11 @@ export function useSlashCommand(vscode: VSCodeContext, exclude?: Set<string>): S
       description: "启动测试流程 - 创建新任务",
       hints: ["testflow", "new task"],
     },
+    {
+      name: "sdt-test",
+      description: "testflow测试",
+      hints: ["testflow", "test"],
+    },
     // testagent_change end
   ]
 

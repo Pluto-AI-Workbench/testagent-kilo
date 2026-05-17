@@ -14,6 +14,52 @@ export interface SdtRunnerOpts {
 
 type JsonLine = Record<string, unknown>
 
+export class SdtTestRunner {
+  private proc: ChildProcess | null = null
+
+  run(opts: SdtRunnerOpts): void {
+    const sid = opts.sessionID
+
+    this.proc = spawn(opts.cmd, opts.args, {
+      cwd: opts.cwd,
+      env: { ...process.env, ...opts.env },
+      stdio: ["pipe", "pipe", "pipe"],
+      shell: process.platform === "win32",
+    })
+
+    let stdout = ""
+    let stderr = ""
+
+    this.proc.stdout?.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString()
+      opts.post({ type: "testflow.text", sessionID: sid, text: chunk.toString() })
+    })
+
+    this.proc.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString()
+      opts.post({ type: "testflow.log", sessionID: sid, level: "error", message: chunk.toString() })
+    })
+
+    this.proc.on("close", (code) => {
+      opts.post({ type: "testflow.done", sessionID: sid, exitCode: code ?? 0, stdout, stderr })
+      this.proc = null
+    })
+
+    this.proc.on("error", (err) => {
+      opts.post({ type: "testflow.error", sessionID: sid, error: err.message })
+      this.proc = null
+    })
+  }
+
+  abort(): void {
+    if (!this.proc) return
+    try {
+      this.proc.kill("SIGTERM")
+    } catch {}
+    this.proc = null
+  }
+}
+
 export class SdtRunner {
   private proc: ChildProcess | null = null
   private sessionID = ""
