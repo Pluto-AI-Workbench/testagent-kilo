@@ -133,7 +133,7 @@ export class SystemNotificationService {
       const fs = require("fs")
       const os = require("os")
 
-      const appID = "TestAgent.VSCode"
+      const appID = "TestAgent通知"
 
       // Escape XML special characters
       const xmlEscape = (str: string) =>
@@ -147,13 +147,13 @@ export class SystemNotificationService {
       const escapedTitle = xmlEscape(title)
       const escapedMessage = xmlEscape(message)
 
-      // Create Toast XML
-      const toastXml = `<toast><visual><binding template="ToastText02"><text id="1">${escapedTitle}</text><text id="2">${escapedMessage}</text></binding></visual><audio src="ms-winsoundevent:Notification.Default" /></toast>`
+      // Create Toast XML - simple version without image first
+      const toastXml = `<toast><visual><binding template="ToastText02"><text id="2">${escapedMessage}</text></binding></visual><audio src="ms-winsoundevent:Notification.Default" /></toast>`
 
       console.log("[TestAgent] 📦 Creating PowerShell script with COM objects...")
+      console.log("[TestAgent] 📝 Toast XML:", toastXml)
 
       // Create a temporary PowerShell script file
-      // This avoids command-line escaping issues and allows better error handling
       const tempDir = os.tmpdir()
       const scriptPath = path.join(tempDir, `testagent-toast-${Date.now()}.ps1`)
 
@@ -170,36 +170,37 @@ ${toastXml}
 "@
 
 try {
-    # Create XML document
+    Write-Host "Creating XML document..."
     $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
     $xml.LoadXml($toastXml)
+    Write-Host "XML loaded successfully"
     
-    # Create toast notification
+    Write-Host "Creating toast notification..."
     $toast = New-Object Windows.UI.Notifications.ToastNotification($xml)
+    Write-Host "Toast created successfully"
     
-    # Create notifier with AppID
+    Write-Host "Creating notifier with AppID: ${appID}"
     $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('${appID}')
+    Write-Host "Notifier created successfully"
     
-    # Show the toast
+    Write-Host "Showing toast..."
     $notifier.Show($toast)
-    
     Write-Host "SUCCESS: Toast notification displayed"
     exit 0
 } catch {
     Write-Error "FAILED: $($_.Exception.Message)"
+    Write-Error "Type: $($_.Exception.GetType().FullName)"
     Write-Error "Stack: $($_.ScriptStackTrace)"
     exit 1
 }
 `.trim()
 
       try {
-        // Write script to temp file with UTF-8 BOM encoding for better compatibility
+        // Write script to temp file with UTF-8 BOM encoding
         fs.writeFileSync(scriptPath, "\ufeff" + psScript, "utf8")
         console.log("[TestAgent] ✅ PowerShell script created at:", scriptPath)
 
-        // Execute PowerShell script with elevated COM permissions
-        // -Sta: Single-threaded apartment (required for COM)
-        // -WindowStyle Hidden: Don't show PowerShell window
+        // Execute PowerShell script with COM support
         const command = `powershell -Sta -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${scriptPath}"`
 
         console.log("[TestAgent] 🚀 Executing PowerShell with COM objects...")
@@ -213,18 +214,18 @@ try {
             console.warn("[TestAgent] ⚠️ Failed to delete temp script:", cleanupError)
           }
 
+          console.log("[TestAgent] 📊 PowerShell execution completed")
+          console.log("[TestAgent] 📤 stdout:", stdout || "(empty)")
+          console.log("[TestAgent] 📤 stderr:", stderr || "(empty)")
+          console.log("[TestAgent] ❓ error:", error ? error.message : "(none)")
+
           if (error) {
             console.error("[TestAgent] ❌ PowerShell COM Toast error:", error.message)
-            if (stdout) console.log("[TestAgent] stdout:", stdout)
-            if (stderr) console.log("[TestAgent] stderr:", stderr)
             reject(error)
             return
           }
 
           console.log("[TestAgent] ✅ PowerShell COM Toast executed successfully")
-          if (stdout) console.log("[TestAgent] 📤 stdout:", stdout)
-          if (stderr && stderr.trim()) console.log("[TestAgent] 📤 stderr:", stderr)
-
           resolve()
         })
       } catch (fileError) {
@@ -246,7 +247,7 @@ try {
 
     return new Promise((resolve, reject) => {
       const { exec } = require("child_process")
-      const appID = "TestAgent"
+      const appID = "TestAgent通知"
       const displayName = "TestAgent"
       const iconPath = path.join(this.extensionUri.fsPath, "resources", "icon.png").replace(/\\/g, "\\\\")
 

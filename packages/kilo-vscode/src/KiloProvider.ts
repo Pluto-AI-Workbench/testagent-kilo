@@ -3198,10 +3198,26 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     console.log("[TestAgent] ✅ Step 4: Notification is enabled")
     console.log("[TestAgent] 🎉 All checks passed! Showing notification...")
     
-    // Show system notification with Chinese text
+    // Get task name from current session
+    let taskName = "任务"
+    
+    // Try to get from currentSession first
+    if (this.currentSession?.id === sessionID && this.currentSession.title) {
+      taskName = this.currentSession.title
+      console.log("[TestAgent] 📋 Task name from currentSession:", taskName)
+    } else if (this.client) {
+      // If not available, try to fetch it asynchronously (don't wait)
+      this.client.session.get({ sessionID }).then(r => {
+        if (r.data?.title) {
+          console.log("[TestAgent] 📋 Task name from API:", r.data.title)
+        }
+      }).catch(() => {})
+    }
+    
+    // Show system notification with task name
     this.systemNotification.notify({
       title: "TestAgent",
-      message: "任务已完成",
+      message: `${taskName}已完成`,
       type: "info",
       onClick: () => this.revealWebview(),
     })
