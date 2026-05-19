@@ -19,6 +19,7 @@ import { FileIgnoreController } from "./services/autocomplete/shims/FileIgnoreCo
 import { ChatTextAreaAutocomplete } from "./services/autocomplete/chat-autocomplete/ChatTextAreaAutocomplete"
 import { buildWebviewHtml } from "./utils"
 import { TelemetryProxy, type TelemetryPropertiesProvider } from "./services/telemetry"
+import { SystemNotificationService } from "./services/system-notification" // testagent_change
 import {
   sessionToWebview,
   indexProvidersById,
@@ -140,8 +141,14 @@ const mapAgent = (a: Agent) => ({
 export class KiloProvider implements vscode.WebviewViewProvider, TelemetryPropertiesProvider {
   public static readonly viewType = "testagent.SidebarProvider" // testagent_change
   private readonly instanceId = crypto.randomUUID()
+  private webviewType: "sidebar" | "panel" | "unknown" = "unknown" // testagent_change
 
   private webview: vscode.Webview | null = null
+  private webviewView: vscode.WebviewView | null = null // testagent_change - store view reference for visibility check
+  
+  // testagent_change start - System notification service
+  private systemNotification: SystemNotificationService
+  // testagent_change end
   private currentSession: Session | null = null
   /** Remembers the last selected session so /new can stay in the same worktree after clearSession. */
   private contextSessionID: string | undefined
@@ -204,6 +211,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
   private unsubscribeFavoritesChange: (() => void) | null = null
   private unsubscribeMigrationComplete: (() => void) | null = null // legacy-migration
   private unsubscribeClearPendingPrompts: (() => void) | null = null
+  private unsubscribeAgentsChange: (() => void) | null = null // testagent_change
   private unsubscribeDirectoryProvider: (() => void) | null = null
   private initConnectionPromise: Promise<void> | null = null
   private webviewMessageDisposable: vscode.Disposable | null = null
@@ -252,6 +260,10 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     this.slimEditMetadata = options?.slimEditMetadata ?? true
 
     TelemetryProxy.getInstance().setProvider(this)
+    
+    // testagent_change start - Initialize system notification service
+    this.systemNotification = new SystemNotificationService(extensionUri)
+    // testagent_change end
   }
 
   setRemoteService(service: RemoteStatusService): void {
@@ -358,6 +370,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
         vscodeLanguage: vscode.env.language,
         languageOverride: langConfig.get<string>("language"),
         workspaceDirectory: this.getProjectDirectory(this.currentSession?.id),
+        webviewType: this.webviewType, // testagent_change
       })
     } else {
       console.log("[TestAgent]  ⚠️ Skipping ready message (no serverInfo)")
@@ -413,6 +426,8 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     // Store the webview references
     this.isWebviewReady = false
     this.webview = webviewView.webview
+    this.webviewView = webviewView // testagent_change - store view reference
+    this.webviewType = "sidebar" // testagent_change
 
     // Set up webview options
     webviewView.webview.options = {
@@ -443,6 +458,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     // WebviewPanel can be restored/reloaded; ensure we don't treat it as ready prematurely.
     this.isWebviewReady = false
     this.webview = panel.webview
+    this.webviewType = "panel" // testagent_change
 
     panel.webview.options = {
       enableScripts: true,
@@ -893,6 +909,14 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
         case "restartServer":
           void this.handleRestartServer(message.logLevel)
           break
+        // testagent_change start - reload commands
+        case "reloadSkills":
+          void vscode.commands.executeCommand("testagent.new.reloadSkills")
+          break
+        case "reloadMcp":
+          void vscode.commands.executeCommand("testagent.new.reloadMcp")
+          break
+        // testagent_change end
         case "deleteSession":
           await this.handleDeleteSession(message.sessionID)
           break
@@ -1120,6 +1144,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     this.unsubscribeProfileChange?.()
     this.unsubscribeFavoritesChange?.()
     this.unsubscribeClearPendingPrompts?.()
+    this.unsubscribeAgentsChange?.() // testagent_change
     this.unsubscribeDirectoryProvider?.()
 
     try {
@@ -1221,6 +1246,12 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       this.unsubscribeClearPendingPrompts = this.connectionService.onClearPendingPrompts(() => {
         this.postMessage({ type: "clearPendingPrompts" })
       })
+
+      // testagent_change start - Subscribe to agents change broadcast from other KiloProvider instances
+      this.unsubscribeAgentsChange = this.connectionService.onAgentsChanged(() => {
+        void this.fetchAndSendAgents()
+      })
+      // testagent_change end
 
       // Register this provider's directories so drainPendingPrompts() covers all instances
       this.unsubscribeDirectoryProvider = this.connectionService.registerDirectoryProvider(() => {
@@ -1823,7 +1854,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
    * Reload MCP servers from config (for external plugins that modify config)
    * Public API that can be called via VS Code commands
    * testagent_change
-   * 
+   *
    * Uses the backend's dedicated /mcp/reload endpoint to reload only MCP servers
    * without affecting other services (Sessions, Plugins, Skills, etc.)
    */
@@ -1870,12 +1901,12 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       // This is critical for picking up changes from both global and project config files
       const dir = this.getWorkspaceDirectory()
       console.log("[TestAgent] Invalidating backend config cache for directory:", dir)
-      
+
       // Invalidate global config cache
       await this.client.global.config.update({ config: {} }).catch((e: unknown) => {
         console.warn("[TestAgent] global.config.update after MCP reload failed:", e)
       })
-      
+
       // Dispose instance to force rebuild from fresh config
       await this.client.instance.dispose({ directory: dir }).catch((e: unknown) => {
         console.warn("[TestAgent] instance.dispose after MCP reload failed:", e)
@@ -1887,11 +1918,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
 
       // Refresh all relevant data in UI
       console.log("[TestAgent] Fetching fresh data from backend...")
-      await Promise.all([
-        this.fetchAndSendMcpStatus(),
-        this.fetchAndSendConfig(true),
-        this.fetchAndSendAgents(),
-      ])
+      await Promise.all([this.fetchAndSendMcpStatus(), this.fetchAndSendConfig(true), this.fetchAndSendAgents()])
 
       console.log("[TestAgent] MCP servers reloaded successfully")
       vscode.window.showInformationMessage("MCP 服务器已重新加载")
@@ -1899,16 +1926,12 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       console.error("[TestAgent] Failed to reload MCP servers:", error)
       const message = error instanceof Error ? error.message : String(error)
       vscode.window.showErrorMessage(`重新加载 MCP 服务器失败: ${message}`)
-      
+
       // Fallback: try to refresh UI anyway
       try {
         this.cachedConfigMessage = null
         this.cachedAgentsMessage = null
-        await Promise.all([
-          this.fetchAndSendMcpStatus(),
-          this.fetchAndSendConfig(true),
-          this.fetchAndSendAgents(),
-        ])
+        await Promise.all([this.fetchAndSendMcpStatus(), this.fetchAndSendConfig(true), this.fetchAndSendAgents()])
       } catch (fetchError) {
         console.error("[TestAgent] Failed to fetch data after reload error:", fetchError)
       }
@@ -2022,6 +2045,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     try {
       const dir = this.getWorkspaceDirectory()
       console.log("[TestAgent]  handleRemoveMode: trying CLI removal, dir:", dir) // testagent_change
+      // opencode 没有这个api
       const result = await this.client.kilocode.removeAgent({ name, directory: dir })
       console.log("[TestAgent]  handleRemoveMode: CLI result:", result) // testagent_change
       // testagent_change start: Check if API returned HTML (404 fallback) instead of valid response
@@ -2213,9 +2237,9 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
   private async invalidateAfterMarketplaceChange(scope: "project" | "global"): Promise<void> {
     console.log("[TestAgent]  🔄 invalidateAfterMarketplaceChange: starting, scope =", scope) // testagent_change
     if (!this.client) return
-    
+
     const dir = this.getWorkspaceDirectory()
-    
+
     if (scope === "global") {
       // testagent_change start: Use global.config.update({}) to trigger Config.updateGlobal()
       // which now always calls invalidate() to clear the cachedGlobal cache (Duration.infinity TTL)
@@ -2227,7 +2251,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       console.log("[TestAgent]  🔄 invalidateAfterMarketplaceChange: global config cache invalidated") // testagent_change
       // testagent_change end
     }
-    
+
     // Always dispose the per-project instance so it rebuilds state from
     // the (possibly updated) global + project config on the next request.
     console.log("[TestAgent]  🔄 invalidateAfterMarketplaceChange: calling instance.dispose, dir =", dir) // testagent_change
@@ -2235,27 +2259,38 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       console.warn("[TestAgent] instance.dispose() after marketplace change failed:", e)
     })
     console.log("[TestAgent]  🔄 invalidateAfterMarketplaceChange: instance.dispose complete") // testagent_change
-    
+
     // Clear cached messages and wait a bit for backend to rebuild state
     this.cachedAgentsMessage = null
     this.cachedConfigMessage = null
-    
+
     // testagent_change start: Add delay to ensure backend has time to rebuild state
     console.log("[TestAgent]  🔄 invalidateAfterMarketplaceChange: waiting 200ms for backend to rebuild state...") // testagent_change
     await new Promise((resolve) => setTimeout(resolve, 200))
     console.log("[TestAgent]  🔄 invalidateAfterMarketplaceChange: wait complete") // testagent_change
     // testagent_change end
-    
+
     console.log("[TestAgent]  🔄 invalidateAfterMarketplaceChange: fetching fresh data") // testagent_change
     await Promise.all([this.fetchAndSendAgents(), this.fetchAndSendConfig()])
     console.log("[TestAgent]  🔄 invalidateAfterMarketplaceChange: complete") // testagent_change
+
+    // testagent_change start - Broadcast agents change to other KiloProvider instances
+    console.log("[TestAgent]  🔄 invalidateAfterMarketplaceChange: broadcasting agents change") // testagent_change
+    this.connectionService.notifyAgentsChanged()
+    console.log("[TestAgent]  🔄 invalidateAfterMarketplaceChange: broadcast complete") // testagent_change
+    // testagent_change end
   }
 
   /**
    * Fetch backend config and send to webview.
    */
   private async fetchAndSendConfig(refresh = false): Promise<void> {
-    console.log("[TestAgent]  📋 fetchAndSendConfig called, connectionState:", this.connectionState, "refresh:", refresh) // testagent_change
+    console.log(
+      "[TestAgent]  📋 fetchAndSendConfig called, connectionState:",
+      this.connectionState,
+      "refresh:",
+      refresh,
+    ) // testagent_change
     if (!this.client || this.connectionState !== "connected") {
       console.log("[TestAgent]  ⚠️ Not connected, cachedConfigMessage:", this.cachedConfigMessage) // testagent_change
       if (this.cachedConfigMessage) {
@@ -3197,6 +3232,205 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     await config.update(leaf, value, vscode.ConfigurationTarget.Global)
   }
 
+  // testagent_change start - notification methods
+  /**
+   * Show notification when agent completes a task (transitions from busy to idle).
+   * Only shows if:
+   * - Webview is not visible
+   * - Notification setting is enabled
+   */
+  private maybeShowAgentCompletionNotification(
+    sessionID: string,
+    prevStatus: SessionStatus["type"] | undefined,
+    newStatus: SessionStatus["type"],
+  ): void {
+    console.log("[TestAgent] 🔔 Notification check:", {
+      sessionID,
+      prevStatus,
+      newStatus,
+      isTracked: this.trackedSessionIds.has(sessionID),
+      isVisible: this.isWebviewVisible(),
+      trackedSessions: Array.from(this.trackedSessionIds),
+    })
+
+    // Only notify on busy → idle transition
+    if (prevStatus !== "busy" || newStatus !== "idle") {
+      console.log("[TestAgent] ❌ Not a busy→idle transition, skipping")
+      return
+    }
+
+    console.log("[TestAgent] ✅ Step 1: Is busy→idle transition")
+
+    // Track this session if not already tracked
+    if (!this.trackedSessionIds.has(sessionID)) {
+      console.log("[TestAgent] 📝 Session not tracked yet, adding to tracked sessions")
+      this.trackedSessionIds.add(sessionID)
+    }
+
+    console.log("[TestAgent] ✅ Step 2: Session is tracked")
+
+    // Only notify if webview is hidden (check both sidebar and panel)
+    // if (this.isWebviewVisible()) {
+    //   console.log("[TestAgent] ❌ Webview is visible, skipping notification")
+    //   return
+    // }
+
+    console.log("[TestAgent] ✅ Step 3: Webview is hidden")
+
+    // Check if notification is enabled
+    const notifications = vscode.workspace.getConfiguration("testagent.new.notifications")
+    const notifyAgent = notifications.get<boolean>("agent", true)
+    console.log("[TestAgent] 📋 Notification setting:", notifyAgent)
+    
+    if (!notifyAgent) {
+      console.log("[TestAgent] ❌ Notification disabled in settings")
+      return
+    }
+
+    console.log("[TestAgent] ✅ Step 4: Notification is enabled")
+    console.log("[TestAgent] 🎉 All checks passed! Showing notification...")
+    
+    // Get task name from current session
+    let taskName = "任务"
+    
+    // Try to get from currentSession first
+    if (this.currentSession?.id === sessionID && this.currentSession.title) {
+      taskName = this.currentSession.title
+      console.log("[TestAgent] 📋 Task name from currentSession:", taskName)
+    } else if (this.client) {
+      // If not available, try to fetch it asynchronously (don't wait)
+      this.client.session.get({ sessionID }).then(r => {
+        if (r.data?.title) {
+          console.log("[TestAgent] 📋 Task name from API:", r.data.title)
+        }
+      }).catch(() => {})
+    }
+    
+    // Show system notification with task name
+    this.systemNotification.notify({
+      title: "TestAgent",
+      message: `${taskName}已完成`,
+      type: "info",
+      onClick: () => this.revealWebview(),
+    })
+
+    console.log("[TestAgent] 📢 Notification method called")
+
+    // Play sound if configured
+    this.playNotificationSound("agent")
+  }
+
+  /**
+   * Show notification when permission is requested.
+   * Only shows if:
+   * - Webview is not visible
+   * - Notification setting is enabled
+   */
+  private maybeShowPermissionNotification(sessionID: string, permission: string): void {
+    // Only notify if webview is hidden
+    // if (this.isWebviewVisible()) return
+
+    // Check if notification is enabled
+    const notifications = vscode.workspace.getConfiguration("testagent.new.notifications")
+    const notifyPermissions = notifications.get<boolean>("permissions", true)
+    if (!notifyPermissions) return
+
+    console.log("[TestAgent] ✅ Showing permission notification")
+
+    // Show system notification with Chinese text
+    this.systemNotification.notify({
+      title: "TestAgent",
+      message: `需要权限：${permission}`,
+      type: "warning",
+      onClick: () => this.revealWebview(),
+    })
+
+    // Play sound if configured
+    this.playNotificationSound("permissions")
+  }
+
+  /**
+   * Show notification when an error occurs.
+   * Only shows if:
+   * - Webview is not visible
+   * - Notification setting is enabled
+   */
+  private maybeShowErrorNotification(sessionID: string, error: string): void {
+    // Only notify if webview is hidden
+    // if (this.isWebviewVisible()) return
+
+    // Check if notification is enabled
+    const notifications = vscode.workspace.getConfiguration("testagent.new.notifications")
+    const notifyErrors = notifications.get<boolean>("errors", true)
+    if (!notifyErrors) return
+
+    // Truncate long error messages
+    const shortError = error.length > 50 ? error.substring(0, 50) + "..." : error
+
+    console.log("[TestAgent] ✅ Showing error notification")
+
+    // Show system notification with Chinese text
+    this.systemNotification.notify({
+      title: "TestAgent",
+      message: `发生错误：${shortError}`,
+      type: "error",
+      onClick: () => this.revealWebview(),
+    })
+
+    // Play sound if configured
+    this.playNotificationSound("errors")
+  }
+
+  /**
+   * Check if the webview is currently visible (sidebar or panel).
+   */
+  private isWebviewVisible(): boolean {
+    // For sidebar, check the actual visibility of the webviewView
+    if (this.webviewView) {
+      const visible = this.webviewView.visible
+      console.log("[TestAgent] 👁️ isWebviewVisible check (sidebar):", {
+        hasView: true,
+        visible,
+      })
+      return visible
+    }
+
+    // Fallback: if no view reference, assume visible if webview exists
+    const fallback = this.webview !== null && this.isWebviewReady
+    console.log("[TestAgent] 👁️ isWebviewVisible check (fallback):", {
+      hasWebview: this.webview !== null,
+      isReady: this.isWebviewReady,
+      result: fallback,
+    })
+    return fallback
+  }
+
+  /**
+   * Reveal the webview (sidebar or panel).
+   */
+  private revealWebview(): void {
+    // Focus the TestAgent sidebar view
+    vscode.commands.executeCommand("testagent.new.focus")
+  }
+
+  /**
+   * Play notification sound based on user settings.
+   * Currently only logs - actual sound playback would require audio files.
+   */
+  private playNotificationSound(type: "agent" | "permissions" | "errors"): void {
+    const sounds = vscode.workspace.getConfiguration("testagent.new.sounds")
+    const sound = sounds.get<string>(type, "default")
+
+    if (sound === "none") return
+
+    // TODO: Implement actual sound playback
+    // This would require:
+    // 1. Audio files in the extension
+    // 2. A way to play them (e.g., via webview or native API)
+    console.log(`[TestAgent] Would play ${type} notification sound: ${sound}`)
+  }
+  // testagent_change end
+
   /**
    * Reset all "testagent.new.*" extension settings to their defaults by reading
    * contributes.configuration from the extension's package.json at runtime.
@@ -3331,12 +3565,17 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     // busy-session warning on Save.
     if (event.type === "session.status") {
       const sid = event.properties.sessionID
-      this.sessionStatusMap.set(sid, event.properties.status.type)
+      const prevStatus = this.sessionStatusMap.get(sid)
+      const newStatus = event.properties.status.type
+      this.sessionStatusMap.set(sid, newStatus)
       const msg = mapSSEEventToWebviewMessage(event, sid)
       if (msg) {
         this.streams.flush(sid)
         this.postMessage(msg)
       }
+      // testagent_change start - show notification when agent completes
+      this.maybeShowAgentCompletionNotification(sid, prevStatus, newStatus)
+      // testagent_change end
       return
     }
 
@@ -3356,6 +3595,33 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       const msg = mapSSEEventToWebviewMessage(event, event.properties.sessionID as string | undefined)
       if (msg) this.postMessage(msg)
       return
+    }
+    // testagent_change end
+
+    // testagent_change start - handle permission.asked events for notifications
+    if (event.type === "permission.asked") {
+      const sid = event.properties.sessionID
+      const permission = event.properties.permission
+      if (sid && this.trackedSessionIds.has(sid)) {
+        this.maybeShowPermissionNotification(sid, permission)
+      }
+    }
+    // testagent_change end
+
+    // testagent_change start - handle session.error events for notifications
+    if (event.type === "session.error") {
+      const sid = event.properties.sessionID
+      const error = event.properties.error
+      if (sid && error && this.trackedSessionIds.has(sid)) {
+        // Extract error message from the error object
+        const errorMsg =
+          typeof error === "string"
+            ? error
+            : "message" in error && typeof error.message === "string"
+              ? error.message
+              : "An error occurred"
+        this.maybeShowErrorNotification(sid, errorMsg)
+      }
     }
     // testagent_change end
 
@@ -3777,6 +4043,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     this.unsubscribeFavoritesChange?.()
     this.unsubscribeMigrationComplete?.()
     this.unsubscribeClearPendingPrompts?.()
+    this.unsubscribeAgentsChange?.() // testagent_change
     this.unsubscribeDirectoryProvider?.()
     this.viewStateDisposable?.dispose()
     this.visibilityDisposable?.dispose()
@@ -3795,30 +4062,30 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
   }
 
   private async resolveShell(name: string): Promise<string | null> {
-     if (process.platform === "win32" && name === "bash") {
-       const candidates = [
-         "C:/Program Files/Git/bin/bash.exe",
-         "C:/Program Files (x86)/Git/bin/bash.exe",
-         "C:/Program Files/Git/usr/bin/bash.exe",
-       ]
-       for (const f of candidates) {
-         if (fs.existsSync(f)) return f
-       }
-       try {
-         const { stdout } = await exec("where", ["bash"])
-         return (stdout.trim().split("\n")[0] || null)?.replace(/\\/g, "/") ?? null
-       } catch {}
-       return null
-     }
-     const which = process.platform === "win32" ? "where" : "which"
-     try {
-       const { stdout } = await exec(which, [name])
-       return (stdout.trim().split("\n")[0] || null)?.replace(/\\/g, "/") ?? null
-     } catch {}
-     return null
-   }
+    if (process.platform === "win32" && name === "bash") {
+      const candidates = [
+        "C:/Program Files/Git/bin/bash.exe",
+        "C:/Program Files (x86)/Git/bin/bash.exe",
+        "C:/Program Files/Git/usr/bin/bash.exe",
+      ]
+      for (const f of candidates) {
+        if (fs.existsSync(f)) return f
+      }
+      try {
+        const { stdout } = await exec("where", ["bash"])
+        return (stdout.trim().split("\n")[0] || null)?.replace(/\\/g, "/") ?? null
+      } catch {}
+      return null
+    }
+    const which = process.platform === "win32" ? "where" : "which"
+    try {
+      const { stdout } = await exec(which, [name])
+      return (stdout.trim().split("\n")[0] || null)?.replace(/\\/g, "/") ?? null
+    } catch {}
+    return null
+  }
 
-   private async checkGitInstalled(): Promise<boolean> {
+  private async checkGitInstalled(): Promise<boolean> {
     try {
       await exec("git", ["--version"])
       return true

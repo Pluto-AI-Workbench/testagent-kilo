@@ -103,6 +103,22 @@ export function useSlashCommand(vscode: VSCodeContext, exclude?: Set<string>): S
       },
     },
     {
+      name: "reloadSkills",
+      description: "重新加载SKILLS",
+      hints: [],
+      action: () => {
+        vscode.postMessage({ type: "reloadSkills" })
+      },
+    },
+    {
+      name: "reloadMCP",
+      description: "重新加载MCP",
+      hints: [],
+      action: () => {
+        vscode.postMessage({ type: "reloadMcp" })
+      },
+    },
+    {
       name: "compact",
       description: "总结并压缩当前会话",
       hints: ["smol", "condense"],

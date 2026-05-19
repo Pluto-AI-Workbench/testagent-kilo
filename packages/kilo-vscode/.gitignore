@@ -4,3 +4,5 @@ out/
 storybook-static/
 test-results/
 playwright-report/
+*.vsix
+*.zip
