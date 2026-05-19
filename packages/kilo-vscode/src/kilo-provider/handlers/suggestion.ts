@@ -91,21 +91,23 @@ export async function handleSuggestionDismiss(
 export async function fetchAndSendPendingSuggestions(ctx: SuggestionContext): Promise<void> {
   if (!ctx.client) return
   try {
-    const dirs = recoveryDirs(ctx.getWorkspaceDirectory(), ctx.sessionDirectories)
-
-    const seen = new Set<string>()
-    for (const dir of dirs) {
-      const { data } = await ctx.client.suggestion.list({ directory: dir })
-      // testagent_change start: Guard against non-array response
-      if (!data || !Array.isArray(data)) continue
-      // testagent_change end
-      for (const suggestion of recoverableSuggestions(data, ctx.trackedSessionIds, seen)) {
-        ctx.postMessage({
-          type: "suggestionRequest",
-          suggestion,
-        })
-      }
-    }
+    // testagent_change start - disable suggestion API (not available in testagent backend)
+    // const dirs = recoveryDirs(ctx.getWorkspaceDirectory(), ctx.sessionDirectories)
+    // const seen = new Set<string>()
+    // for (const dir of dirs) {
+    //   const { data } = await ctx.client.suggestion.list({ directory: dir })
+    //   // testagent_change start: Guard against non-array response
+    //   if (!data || !Array.isArray(data)) continue
+    //   // testagent_change end
+    //   for (const suggestion of recoverableSuggestions(data, ctx.trackedSessionIds, seen)) {
+    //     ctx.postMessage({
+    //       type: "suggestionRequest",
+    //       suggestion,
+    //     })
+    //   }
+    // }
+    console.log("[TestAgent New]  Skipping pending suggestions fetch (not available)")
+    // testagent_change end
   } catch (error) {
     console.error("[TestAgent New]  Failed to fetch pending suggestions:", error)
   }

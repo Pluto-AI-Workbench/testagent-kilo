@@ -51,7 +51,7 @@ async function drainNetworkWaits(client: KiloClient, dir: string) {
  * Multiple KiloProvider instances subscribe to it for SSE events and state changes.
  */
 export class KiloConnectionService {
-  private readonly serverManager: ServerManager | NodeServerManager
+  private serverManager: ServerManager | NodeServerManager // testagent_change - remove readonly for runtime switching
   private client: KiloClient | null = null
   private sseClient: SdkSSEAdapter | null = null
   private info: { port: number } | null = null
@@ -86,7 +86,12 @@ export class KiloConnectionService {
   private unsubRemote: (() => void) | null = null
 
   constructor(context: vscode.ExtensionContext) {
-    this.serverManager = isTestagentBun() ? new ServerManager(context) : new NodeServerManager(context)
+    // testagent_change start - support runtime switching
+    const savedRuntime = context.globalState.get<"bun" | "nodejs">("testagent.runtime")
+    const currentRuntime = savedRuntime || (isTestagentBun() ? "bun" : "nodejs")
+    this.serverManager = currentRuntime === "bun" ? new ServerManager(context) : new NodeServerManager(context)
+    // testagent_change end
+    
     // testagent_change start - sync user ID to CLI whenever auth session changes
     if (isTestagentBun()) {
       context.subscriptions.push(
@@ -528,6 +533,44 @@ export class KiloConnectionService {
     await this.connect(workspaceDir)
   }
 
+  // testagent_change start - switch runtime
+  /**
+   * Switch between Bun and Node.js runtime and restart the server.
+   * Only available when both runtimes are bundled in the extension.
+   */
+  async switchRuntime(context: vscode.ExtensionContext, runtime: "bun" | "nodejs", workspaceDir: string): Promise<void> {
+    console.log(`[TestAgent] Switching runtime to: ${runtime}`)
+    
+    // Save the runtime preference
+    await context.globalState.update("testagent.runtime", runtime)
+    
+    // Dispose current server
+    this.stopHealthPoll()
+    this.sseClient?.dispose()
+    this.serverManager.dispose()
+    this.sseClient = null
+    this.client = null
+    this.config = null
+    this.info = null
+    this.connectPromise = null
+    
+    // Create new server manager based on runtime
+    this.serverManager = runtime === "bun" ? new ServerManager(context) : new NodeServerManager(context)
+    
+    // Reconnect
+    this.setState("connecting")
+    await this.connect(workspaceDir)
+  }
+
+  /**
+   * Get current runtime type.
+   */
+  getCurrentRuntime(context: vscode.ExtensionContext): "bun" | "nodejs" {
+    const saved = context.globalState.get<"bun" | "nodejs">("testagent.runtime")
+    return saved || (isTestagentBun() ? "bun" : "nodejs")
+  }
+  // testagent_change end
+
   dispose(): void {
     this.stopHealthPoll()
     this.sseClient?.dispose()
@@ -722,12 +765,16 @@ export class KiloConnectionService {
 }
 
 async function drainSuggestions(client: KiloClient, directory: string): Promise<void> {
-  const { data, error: err } = await client.suggestion.list({ directory })
-  if (err) throw new Error(`Failed to list suggestions for ${directory}: ${String(err)}`)
-  if (data) {
-    for (const s of data) {
-      const { error } = await client.suggestion.dismiss({ requestID: s.id, directory })
-      if (error) throw new Error(`Failed to dismiss suggestion ${s.id}: ${String(error)}`)
-    }
-  }
+  // testagent_change start - disable suggestion API (not available in testagent backend)
+  // const { data, error: err } = await client.suggestion.list({ directory })
+  // if (err) throw new Error(`Failed to list suggestions for ${directory}: ${String(err)}`)
+  // if (data) {
+  //   for (const s of data) {
+  //     const { error } = await client.suggestion.dismiss({ requestID: s.id, directory })
+  //     if (error) throw new Error(`Failed to dismiss suggestion ${s.id}: ${String(error)}`)
+  //   }
+  // }
+  // No-op: suggestion API not available in testagent backend
+  console.log(`[TestAgent] Skipping drainSuggestions for ${directory} (not available)`)
+  // testagent_change end
 }

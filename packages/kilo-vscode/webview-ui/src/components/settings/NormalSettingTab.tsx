@@ -1,13 +1,9 @@
-import { Component, For, createMemo, createSignal, onMount, onCleanup } from "solid-js"
+import { Component, createSignal, onMount, onCleanup } from "solid-js"
 import { Card } from "@kilocode/kilo-ui/card"
 import { Select } from "@kilocode/kilo-ui/select"
 import { showToast } from "@kilocode/kilo-ui/toast"
 import { useConfig } from "../../context/config"
-import { useLanguage } from "../../context/language"
-import { useSession } from "../../context/session"
 import { useVSCode } from "../../context/vscode"
-import { parseModelString } from "../../../../src/shared/provider-model"
-import { ModelSelectorBase } from "../shared/ModelSelector"
 import SettingsRow from "./SettingsRow"
 import type { ExtensionMessage } from "../../types/messages"
 
@@ -30,15 +26,21 @@ const logLevelOptions: SelectOption[] = [
   { value: "ERROR", label: "ERROR" },
 ]
 
+const runtimeOptions: SelectOption[] = [
+  { value: "nodejs", label: "Node.js (默认)" },
+  { value: "bun", label: "Bun" },
+]
+
 const NormalSetting: Component = () => {
   const { config, updateConfig } = useConfig()
   const vscode = useVSCode()
   const [gitInstalled, setGitInstalled] = createSignal<boolean | null>(null)
-  const [resolvingShell, setResolvingShell] = createSignal(false)
-  const [logLevel, setLogLevel] = createSignal("INFO")
+  const [runtime, setRuntime] = createSignal<"bun" | "nodejs">("nodejs")
 
   onMount(() => {
     vscode.postMessage({ type: "checkGitInstalled" })
+    // Load runtime from VS Code config
+    vscode.postMessage({ type: "getRuntime" })
   })
 
   const unsubMsg = vscode.onMessage((msg: ExtensionMessage) => {
@@ -46,7 +48,6 @@ const NormalSetting: Component = () => {
       setGitInstalled(msg.installed)
     }
     if (msg.type === "shellPathResolved") {
-      setResolvingShell(false)
       if (msg.path) {
         const normalized = msg.path.replace(/\\/g, "/")
         // Avoid marking dirty if config already has this value (e.g. Select re-fired on config load)
@@ -59,6 +60,9 @@ const NormalSetting: Component = () => {
           description: `无法解析 ${msg.name} 的安装路径，请手动在配置文件中设置`,
         })
       }
+    }
+    if (msg.type === "runtimeResult") {
+      setRuntime(msg.runtime)
     }
   })
   onCleanup(unsubMsg)
@@ -118,14 +122,12 @@ const NormalSetting: Component = () => {
       return
     }
 
-    setResolvingShell(true)
     vscode.postMessage({ type: "resolveShellPath", name: value })
   }
 
   const handleLogLevelChange = (option: SelectOption | undefined) => {
     const value = option?.value as "DEBUG" | "INFO" | "WARN" | "ERROR" | undefined
     if (!value) return
-    setLogLevel(value)
     vscode.postMessage({ type: "restartServer", logLevel: value })
     showToast({
       variant: "success",
@@ -135,7 +137,23 @@ const NormalSetting: Component = () => {
   }
 
   const currentLogLevel = (): SelectOption | undefined => {
-    return logLevelOptions.find((opt) => opt.value === logLevel())
+    return logLevelOptions.find((opt) => opt.value === "INFO")
+  }
+
+  const currentRuntime = (): SelectOption | undefined => {
+    return runtimeOptions.find((opt) => opt.value === runtime())
+  }
+
+  const handleRuntimeChange = (option: SelectOption | undefined) => {
+    const value = option?.value as "bun" | "nodejs" | undefined
+    if (!value || value === runtime()) return
+
+    vscode.postMessage({ type: "changeRuntime", runtime: value })
+    showToast({
+      variant: "success",
+      title: "运行时切换中",
+      description: `正在切换到 ${value === "bun" ? "Bun" : "Node.js"} 运行时并重启 CLI...`,
+    })
   }
 
   const getShellOptions = () => {
@@ -163,16 +181,15 @@ const NormalSetting: Component = () => {
           />
         </SettingsRow>
         <SettingsRow
-          title="日志级别"
-          description={`CLI 日志级别，修改后将自动重启 CLI (当前: ${logLevel()})`}
-          last
+          title="CLI 运行时"
+          description={`选择后端运行时 (当前: ${runtime() === "bun" ? "Bun" : "Node.js"})`}
         >
           <Select
-            options={logLevelOptions}
-            current={currentLogLevel()}
+            options={runtimeOptions}
+            current={currentRuntime()}
             value={(opt) => opt.value}
             label={(opt) => opt.label}
-            onSelect={handleLogLevelChange}
+            onSelect={handleRuntimeChange}
             variant="secondary"
             size="small"
             triggerVariant="settings"

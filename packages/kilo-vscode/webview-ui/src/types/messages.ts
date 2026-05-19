@@ -1537,6 +1537,19 @@ export interface CustomProviderModelsFetchedMessage {
   url?:string
 }
 
+// testagent_change start - runtime switching messages
+export interface RuntimeResultMessage {
+  type: "runtimeResult"
+  runtime: "bun" | "nodejs"
+}
+
+export interface ShellPathResolvedMessage {
+  type: "shellPathResolved"
+  name: string
+  path: string | null
+}
+// testagent_change end
+
 export type ExtensionMessage =
   | ReadyMessage
   | GitStatusMessage
@@ -1648,6 +1661,8 @@ export type ExtensionMessage =
   | CustomProviderModelsFetchedMessage
   | RecentsLoadedMessage
   | FavoritesLoadedMessage
+  | RuntimeResultMessage // testagent_change
+  | ShellPathResolvedMessage // testagent_change
   | ModelSelectionsLoadedMessage
   | LanguageChangedMessage
   | ContinueInWorktreeProgressMessage
@@ -2004,6 +2019,17 @@ export interface ResolveShellPathMessage {
   type: "resolveShellPath"
   name: string
 }
+
+// testagent_change start - runtime switching requests
+export interface GetRuntimeRequest {
+  type: "getRuntime"
+}
+
+export interface ChangeRuntimeRequest {
+  type: "changeRuntime"
+  runtime: "bun" | "nodejs"
+}
+// testagent_change end
 
 export interface ShellPathResolvedMessage {
   type: "shellPathResolved"
@@ -2732,6 +2758,8 @@ export type WebviewMessage =
   | ReloadSkillsRequest // testagent_change
   | ReloadMcpRequest // testagent_change
   | ResolveShellPathMessage
+  | GetRuntimeRequest // testagent_change
+  | ChangeRuntimeRequest // testagent_change
 
 // ============================================
 // VS Code API type
