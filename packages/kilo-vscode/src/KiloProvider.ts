@@ -2755,6 +2755,11 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       return
     }
 
+    if (cmd === "run") {
+      await this.handleSdtRunCommand(args, sessionID, providerID, modelID)
+      return
+    }
+
     const serverConfig = this.connectionService.getServerConfig()
     if (!serverConfig) {
       this.postMessage({ type: "testflow.error", sessionID: sessionID ?? "", error: "Not connected to CLI backend" })
@@ -2790,6 +2795,32 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
 
     this.sdtRunner.run({
       cmd: "test",
+      args,
+      cwd: workspaceDir,
+      env: {
+        OPENCODE_SERVER_URL: serverConfig.baseUrl,
+        OPENCODE_SERVER_PASSWORD: serverConfig.password,
+        OPENCODE_SESSION_ID: sid,
+        OPENCODE_PROVIDER_ID: providerID || "",
+        OPENCODE_MODEL_ID: modelID || "",
+      },
+      sessionID: sid,
+      post: (msg) => this.postMessage(msg),
+    })
+  }
+
+  private async handleSdtRunCommand(args: string[], sessionID?: string, providerID?: string, modelID?: string): Promise<void> {
+    const serverConfig = this.connectionService.getServerConfig()
+    if (!serverConfig) {
+      this.postMessage({ type: "testflow.error", sessionID: sessionID ?? "", error: "Not connected to CLI backend" })
+      return
+    }
+
+    const sid = sessionID ?? this.currentSession?.id ?? ""
+    const workspaceDir = this.getContextDirectory()
+
+    this.sdtRunner.run({
+      cmd: "run",
       args,
       cwd: workspaceDir,
       env: {
