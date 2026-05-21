@@ -1,129 +1,102 @@
-/* testagent_change - new file */
+/* testagent_change - testflow tool renderer styles */
 
-.testflow-panel {
-  margin: 8px 12px;
-  padding: 12px;
-  border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
-  border-radius: 6px;
-  background: var(--vscode-editor-background);
-  font-size: 13px;
-}
+/* ── testflow-step ─────────────────────────────────────────────── */
 
-.testflow-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  font-weight: 600;
-}
-
-.testflow-status {
+.testflow-tool-step {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.testflow-status.testflow-running {
-  color: var(--vscode-progressBar-background, #0078d4);
-}
-
-.testflow-status.testflow-error {
-  color: var(--vscode-errorForeground, #f48771);
-}
-
-.testflow-steps {
-  margin: 8px 0;
-  padding-left: 4px;
-}
-
-.testflow-step {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   padding: 4px 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--vscode-foreground);
 }
 
-.testflow-step[data-status="complete"] {
+.testflow-tool-step[data-status="running"] {
+  color: var(--vscode-progressBar-background, #0078d4);
+}
+
+.testflow-tool-step[data-status="completed"] {
   color: var(--vscode-testing-iconPassed, #73c991);
 }
 
-.testflow-step[data-status="exception"] {
+.testflow-tool-step[data-status="error"] {
   color: var(--vscode-errorForeground, #f48771);
 }
 
-.testflow-agent {
+.testflow-tool-step-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── testflow-question ─────────────────────────────────────────── */
+
+.testflow-tool-question {
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 4px 0;
+  background: var(--vscode-editor-background);
+}
+
+.testflow-tool-question-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 0;
-  color: var(--vscode-progressBar-background, #0078d4);
-  font-size: 12px;
-}
-
-.testflow-question {
-  margin: 8px 0;
-  padding: 12px;
-  border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
-  border-radius: 4px;
-  background: var(--vscode-inputBackground);
-}
-
-.testflow-question-header {
+  gap: 6px;
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  font-size: 13px;
 }
 
-.testflow-question-body {
-  margin-bottom: 8px;
+.testflow-tool-question-body {
+  font-size: 12px;
   color: var(--vscode-descriptionForeground);
+  margin-bottom: 8px;
+  line-height: 1.5;
 }
 
-.testflow-question-options {
+.testflow-tool-question-options {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
-.testflow-question-actions {
+.testflow-tool-question-actions {
   display: flex;
   justify-content: flex-end;
+  margin-top: 4px;
 }
 
-.testflow-summary {
-  margin-top: 8px;
-  padding: 8px;
-  border-radius: 4px;
-  background: var(--vscode-textBlockQuote-background, rgba(255, 255, 255, 0.04));
-  color: var(--vscode-descriptionForeground);
-  font-size: 12px;
-}
-
-.testflow-logs {
-  margin-top: 8px;
-  padding: 8px;
-  border-radius: 4px;
-  background: var(--vscode-textBlockQuote-background, rgba(255, 255, 255, 0.04));
-  font-family: var(--vscode-editor-font-family, monospace);
-  font-size: 12px;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.testflow-log {
+.testflow-tool-question-done {
   display: flex;
-  gap: 8px;
-  padding: 2px 0;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--vscode-testing-iconPassed, #73c991);
+}
+
+/* ── testflow-agent ────────────────────────────────────────────── */
+
+.testflow-tool-agent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 13px;
   color: var(--vscode-foreground);
 }
 
-.testflow-log[data-level="error"] {
-  color: var(--vscode-errorForeground, #f48771);
+.testflow-tool-agent[data-status="running"] {
+  color: var(--vscode-progressBar-background, #0078d4);
 }
 
-.testflow-log-prefix {
-  color: var(--vscode-descriptionForeground);
-  flex-shrink: 0;
+.testflow-tool-agent[data-status="completed"] {
+  color: var(--vscode-testing-iconPassed, #73c991);
+}
+
+.testflow-tool-agent-label {
+  flex: 1;
 }

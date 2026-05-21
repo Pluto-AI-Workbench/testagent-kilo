@@ -14,9 +14,6 @@ import { MessageList } from "./MessageList"
 import { PromptInput } from "./PromptInput"
 import { PermissionDock } from "./PermissionDock"
 import { StartupErrorBanner } from "./StartupErrorBanner"
-// testagent_change start - testflow integration
-import { TestflowView } from "./TestflowView"
-// testagent_change end
 import { useSession } from "../../context/session"
 import { useVSCode } from "../../context/vscode"
 import { useLanguage } from "../../context/language"
@@ -145,11 +142,8 @@ export const ChatView: Component<ChatViewProps> = (props) => {
             suggestions={standaloneSuggestions}
             readonly={props.readonly}
           />
-          </div>
         </div>
-        {/* testagent_change start - testflow integration */}
-        <TestflowView />
-        {/* testagent_change end */}
+      </div>
 
       <Show when={dock()}>
         <div class="chat-input">

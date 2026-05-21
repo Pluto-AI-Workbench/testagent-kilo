@@ -2,6 +2,7 @@
 import { spawn } from "../util/process"
 import type { ChildProcess } from "child_process"
 import * as readline from "readline"
+import { TestflowMessageBridge } from "./testflow-bridge"
 
 export interface SdtRunnerOpts {
   cmd: string
@@ -9,6 +10,9 @@ export interface SdtRunnerOpts {
   cwd: string
   env: Record<string, string | undefined>
   sessionID: string
+  userText: string
+  /** Reuse the webview's optimistic message ID to avoid creating a duplicate user message turn. */
+  userMessageID?: string
   post: (msg: unknown) => void
 }
 
@@ -16,19 +20,18 @@ type JsonLine = Record<string, unknown>
 
 export class SdtRunner {
   private proc: ChildProcess | null = null
-  private sessionID = ""
-  private post: ((msg: unknown) => void) | null = null
+  private bridge = new TestflowMessageBridge()
   private running = false
 
   run(opts: SdtRunnerOpts): void {
     if (this.running) {
+      // Notify via bridge so the error appears inline in the chat
       opts.post({ type: "testflow.error", sessionID: opts.sessionID, error: "Another testflow process is already running" })
       return
     }
 
-    this.sessionID = opts.sessionID
-    this.post = opts.post
     this.running = true
+    this.bridge.start({ sessionID: opts.sessionID, userText: opts.userText, userMessageID: opts.userMessageID, post: opts.post })
 
     this.proc = spawn("testflow", [opts.cmd, ...opts.args], {
       cwd: opts.cwd,
@@ -44,22 +47,23 @@ export class SdtRunner {
         const event = JSON.parse(line) as JsonLine
         this.dispatch(event)
       } catch {
-        this.forward("text", { text: line })
+        this.bridge.onText(line)
       }
     })
 
     this.proc.stderr?.on("data", (chunk: Buffer) => {
       const text = chunk.toString().trim()
-      if (text) this.forward("log", { level: "error", message: text })
+      if (text) this.bridge.onLog("error", text)
     })
 
     this.proc.on("close", (code) => {
-      this.forward("done", { exitCode: code ?? 0 })
+      this.bridge.onDone(code ?? 0)
       this.cleanup()
     })
 
     this.proc.on("error", (err) => {
-      this.forward("error", { error: err.message })
+      this.bridge.onError(err.message)
+      this.bridge.onDone(1)
       this.cleanup()
     })
   }
@@ -67,11 +71,13 @@ export class SdtRunner {
   reply(id: string, answers: string[]): void {
     if (!this.proc?.stdin?.writable) return
     this.proc.stdin.write(JSON.stringify({ type: "question_reply", id, answers }) + "\n")
+    this.bridge.onQuestionAnswered(id)
   }
 
   reject(id: string): void {
     if (!this.proc?.stdin?.writable) return
     this.proc.stdin.write(JSON.stringify({ type: "question_reject", id }) + "\n")
+    this.bridge.onQuestionAnswered(id)
   }
 
   abort(): void {
@@ -81,7 +87,7 @@ export class SdtRunner {
     } catch {
       // process may have already exited
     }
-    this.forward("done", { exitCode: 1, summary: "Aborted by user" })
+    this.bridge.onDone(1, "Aborted by user")
     this.cleanup()
   }
 
@@ -93,26 +99,42 @@ export class SdtRunner {
     const type = event.type as string
     switch (type) {
       case "step":
+        this.bridge.onStep(
+          event.title as string,
+          event.status as "start" | "complete" | "exception",
+          event.stage_id as string | undefined,
+        )
+        break
       case "question":
+        this.bridge.onQuestion(
+          event.id as string,
+          event.header as string,
+          event.question as string,
+          event.options as { label: string; description: string }[],
+          event.multiple as boolean | undefined,
+        )
+        break
       case "agent_start":
+        this.bridge.onAgentStart(event.skill as string | undefined, event.prompt as string | undefined)
+        break
       case "agent_done":
+        this.bridge.onAgentDone()
+        break
       case "text":
+        this.bridge.onText(event.text as string)
+        break
       case "log":
+        this.bridge.onLog(event.level as string, event.message as string)
+        break
       case "error":
+        this.bridge.onError(event.error as string)
+        break
       case "done":
-        this.forward(type, event)
+        // handled by proc.on("close")
         break
       default:
-        this.forward("text", { text: JSON.stringify(event) })
+        this.bridge.onText(JSON.stringify(event))
     }
-  }
-
-  private forward(type: string, payload: Record<string, unknown>): void {
-    this.post?.({
-      type: `testflow.${type}`,
-      sessionID: this.sessionID,
-      ...payload,
-    })
   }
 
   private cleanup(): void {
