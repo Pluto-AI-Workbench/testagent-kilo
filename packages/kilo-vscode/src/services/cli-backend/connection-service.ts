@@ -747,7 +747,7 @@ export class KiloConnectionService {
       const token = session?.accessToken
       console.log("[testagent-vscode] syncUserId:", { hasSession: !!session, id, name, hasToken: !!token })
       const auth = `Basic ${Buffer.from(`opencode:${this.config.password}`).toString("base64")}`
-      const response = await fetch(`${this.config.baseUrl}/kilocode/testagent/user`, {
+      const response = await fetch(`${this.config.baseUrl}/testagent/user`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: auth },
         body: JSON.stringify({ id, name, token }),
