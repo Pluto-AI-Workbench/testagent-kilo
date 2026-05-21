@@ -112,12 +112,16 @@ export class AutocompleteModel {
    */
   public async hasBalance(): Promise<boolean> {
     if (!this.connectionService) return false
-    try {
-      const client = await this.connectionService.getClientAsync()
-      const result = await client.kilo.profile().catch(() => null)
-      return (result?.data?.balance?.balance ?? 0) > 0
-    } catch {
-      return false
-    }
+    // testagent_change start - disable profile API (not available in testagent backend)
+    // try {
+    //   const client = await this.connectionService.getClientAsync()
+    //   const result = await client.kilo.profile().catch(() => null)
+    //   return (result?.data?.balance?.balance ?? 0) > 0
+    // } catch {
+    //   return false
+    // }
+    // Always return false since profile API is not available
+    return false
+    // testagent_change end
   }
 }

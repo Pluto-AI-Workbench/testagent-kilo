@@ -110,6 +110,7 @@ export class ServerManager {
           }),
           // testagent_change end
           OPENCODE_SERVER_PASSWORD: password,
+          OPENCODE_SERVER_USERNAME: "opencode", // testagent_change - explicitly set username for consistency
           // Force mimalloc (the allocator Bun ships with) to return freed pages
           // to the OS immediately instead of retaining them in its arenas.
           // Without this, Bun.spawn's piped stdio accumulates ~2 MB of native
@@ -134,7 +135,11 @@ export class ServerManager {
           ...(userName && { TESTAGENT_USER_NAME: userName }), // testagent_change
         },
         stdio: ["ignore", "pipe", "pipe"],
-        detached: true,
+        // testagent_change start - prevent CMD window on Windows
+        // detached: true causes a console window to appear on Windows.
+        // Only use detached on Unix platforms for proper process group handling.
+        ...(process.platform !== "win32" && { detached: true }),
+        // testagent_change end
       })
       console.log("[TestAgent] ServerManager: 📦 Process spawned with PID:", serverProcess.pid)
 

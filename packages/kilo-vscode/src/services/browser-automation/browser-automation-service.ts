@@ -10,7 +10,7 @@ export class BrowserAutomationService implements vscode.Disposable {
   private stateListeners: Array<(state: BrowserAutomationState) => void> = []
 
   // MCP server name used when registering with the CLI backend
-  private static readonly MCP_SERVER_NAME = "kilo-playwright"
+  private static readonly MCP_SERVER_NAME = "testagent-playwright"
 
   constructor(private readonly connectionService: KiloConnectionService) {
     // Listen for settings changes
@@ -45,7 +45,7 @@ export class BrowserAutomationService implements vscode.Disposable {
    */
   async syncWithSettings(): Promise<void> {
     const config = vscode.workspace.getConfiguration("testagent.new.browserAutomation")
-    const enabled = config.get<boolean>("enabled", false)
+    const enabled = config.get<boolean>("enabled", true)
 
     if (enabled) {
       await this.register()
@@ -60,7 +60,7 @@ export class BrowserAutomationService implements vscode.Disposable {
    */
   async reregisterIfEnabled(): Promise<void> {
     const config = vscode.workspace.getConfiguration("testagent.new.browserAutomation")
-    const enabled = config.get<boolean>("enabled", false)
+    const enabled = config.get<boolean>("enabled", true)
     if (enabled) {
       await this.register()
     }

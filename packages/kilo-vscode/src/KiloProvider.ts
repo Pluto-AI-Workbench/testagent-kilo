@@ -380,14 +380,21 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     // Profile returns 401 when user isn't logged into Kilo Gateway — that's expected.
     // Use fire-and-forget (no throwOnError) to match old getProfile() which returned null on error.
     if (this.connectionState === "connected" && this.client) {
-      console.log("[TestAgent]  👤 syncWebviewState fetching profile...")
-      const profileResult = await retry(() => this.client!.kilo.profile())
-      const profileData = profileResult.data ?? null
-      console.log("[TestAgent]  👤 syncWebviewState profile:", profileData ? "received" : "null")
+      // testagent_change start - disable profile API (not available in testagent backend)
+      // console.log("[TestAgent]  👤 syncWebviewState fetching profile...")
+      // const profileResult = await retry(() => this.client!.kilo.profile())
+      // const profileData = profileResult.data ?? null
+      // console.log("[TestAgent]  👤 syncWebviewState profile:", profileData ? "received" : "null")
+      // this.postMessage({
+      //   type: "profileData",
+      //   data: profileData,
+      // })
+      console.log("[TestAgent]  👤 syncWebviewState skipping profile (not available)")
       this.postMessage({
         type: "profileData",
-        data: profileData,
+        data: null,
       })
+      // testagent_change end
 
       // Re-send cached worktree stats and git status after webview reload.
       if (this.cachedStats) this.postMessage(this.cachedStats)
@@ -845,6 +852,32 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
           this.webview?.postMessage({ type: "shellPathResolved", name, path })
           break
         }
+        // testagent_change start - runtime switching
+        case "getRuntime": {
+          if (!this.extensionContext) {
+            console.warn("[TestAgent] No extension context available for getRuntime")
+            break
+          }
+          const runtime = this.connectionService.getCurrentRuntime(this.extensionContext)
+          this.webview?.postMessage({ type: "runtimeResult", runtime })
+          break
+        }
+        case "changeRuntime": {
+          if (!this.extensionContext) {
+            vscode.window.showErrorMessage("Extension context not available")
+            break
+          }
+          const { runtime } = message
+          try {
+            await this.connectionService.switchRuntime(this.extensionContext, runtime)
+            this.webview?.postMessage({ type: "runtimeResult", runtime })
+            vscode.window.showInformationMessage(`已切换到 ${runtime === "bun" ? "Bun" : "Node.js"} 运行时`)
+          } catch (error) {
+            vscode.window.showErrorMessage(`切换运行时失败: ${error}`)
+          }
+          break
+        }
+        // testagent_change end
         case "updateConfig":
           await this.handleUpdateConfig(message.config)
           break
@@ -938,11 +971,11 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
         case "requestTimelineSetting":
           this.sendTimelineSetting()
           break
-        case "requestNotifications":
-          this.fetchAndSendNotifications().catch((e) =>
-            console.error("[TestAgent] fetchAndSendNotifications failed:", e),
-          )
-          break
+        // case "requestNotifications":
+        //   this.fetchAndSendNotifications().catch((e) =>
+        //     console.error("[TestAgent] fetchAndSendNotifications failed:", e),
+        //   )
+        //   break
         case "requestCloudSessions":
           await handleRequestCloudSessions(this.cloudSessionCtx, message)
           break
@@ -1196,12 +1229,16 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
           // sequential await chain doesn't prevent warnings from being shown
           // void this.checkConfigWarnings("state")
           try {
+            // testagent_change start - disable profile API (not available in testagent backend)
             // Profile fetch is best-effort — returns 401 when user isn't logged into gateway.
-            const sdkClient = this.client
-            if (sdkClient) {
-              const profileResult = await sdkClient.kilo.profile()
-              this.postMessage({ type: "profileData", data: profileResult.data ?? null })
-            }
+            // const sdkClient = this.client
+            // if (sdkClient) {
+            //   const profileResult = await sdkClient.kilo.profile()
+            //   this.postMessage({ type: "profileData", data: profileResult.data ?? null })
+            // }
+            console.log("[TestAgent]  👤 Skipping profile fetch (not available)")
+            this.postMessage({ type: "profileData", data: null })
+            // testagent_change end
             await this.syncWebviewState("sse-connected")
             await this.flushPendingSessionRefresh("sse-connected")
             this.recoverPendingPrompts()
@@ -1216,9 +1253,9 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       })
 
       // Subscribe to notification dismiss broadcast from other KiloProvider instances
-      this.unsubscribeNotificationDismiss = this.connectionService.onNotificationDismissed(() => {
-        this.fetchAndSendNotifications()
-      })
+      // this.unsubscribeNotificationDismiss = this.connectionService.onNotificationDismissed(() => {
+      //   this.fetchAndSendNotifications()
+      // })
 
       // Subscribe to language change broadcast from other KiloProvider instances
       this.unsubscribeLanguageChange = this.connectionService.onLanguageChanged((locale) => {
@@ -1304,7 +1341,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
         this.fetchAndSendSkills(),
         this.fetchAndSendCommands(),
         this.fetchAndSendConfig(),
-        this.fetchAndSendNotifications(),
+        // this.fetchAndSendNotifications(),
         this.seedSessionStatusMap(),
       ])
       this.cachedGitRepo = await hasGit(this.client!, this.getWorkspaceDirectory())
@@ -2484,14 +2521,18 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     }
 
     try {
-      const { data: all } = await retry(() => this.client!.kilo.notifications(undefined, { throwOnError: true }))
-      // testagent_change start: Guard against non-array response (e.g. HTML from 404 fallback)
-      if (!Array.isArray(all)) {
-        console.warn("[TestAgent]  notifications API returned non-array, skipping:", typeof all)
-        return
-      }
+      // testagent_change start - disable notifications API (not available in testagent backend)
+      // const { data: all } = await retry(() => this.client!.kilo.notifications(undefined, { throwOnError: true }))
+      // // testagent_change start: Guard against non-array response (e.g. HTML from 404 fallback)
+      // if (!Array.isArray(all)) {
+      //   console.warn("[TestAgent]  notifications API returned non-array, skipping:", typeof all)
+      //   return
+      // }
+      // // testagent_change end
+      // const notifications = all.filter((n) => !n.showIn || n.showIn.includes("extension"))
+      console.log("[TestAgent]  📢 Skipping notifications fetch (not available)")
+      const notifications: any[] = []
       // testagent_change end
-      const notifications = all.filter((n) => !n.showIn || n.showIn.includes("extension"))
       const existing = this.extensionContext?.globalState.get<string[]>("kilo.dismissedNotificationIds", []) ?? []
       const active = new Set(notifications.map((n) => n.id))
       // Only prune stale dismissed IDs when we have a non-empty notification
@@ -2536,7 +2577,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
         }
       }
     }
-    await this.fetchAndSendNotifications()
+    // await this.fetchAndSendNotifications()
     this.connectionService.notifyNotificationDismissed(notificationId)
   }
 
@@ -3192,9 +3233,13 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
 
     // Org switch succeeded — refresh profile and providers independently (best-effort)
     try {
-      const profileResult = await this.client!.kilo.profile()
-      // Broadcast to all webviews (sidebar, profile tab, agent manager, etc.)
-      this.connectionService.notifyProfileChanged(profileResult.data ?? null)
+      // testagent_change start - disable profile API (not available in testagent backend)
+      // const profileResult = await this.client!.kilo.profile()
+      // // Broadcast to all webviews (sidebar, profile tab, agent manager, etc.)
+      // this.connectionService.notifyProfileChanged(profileResult.data ?? null)
+      console.log("[TestAgent]  👤 Skipping profile refresh after org switch (not available)")
+      this.connectionService.notifyProfileChanged(null)
+      // testagent_change end
     } catch (error) {
       console.error("[TestAgent]  Failed to refresh profile after org switch:", error)
     }
@@ -3306,13 +3351,15 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
 
     console.log("[TestAgent] ✅ Step 1: Is busy→idle transition")
 
-    // Track this session if not already tracked
+    // Only notify if this provider is tracking the session
+    // This prevents duplicate notifications when multiple KiloProvider instances exist
+    // (sidebar, settings panel, tabs, etc.)
     if (!this.trackedSessionIds.has(sessionID)) {
-      console.log("[TestAgent] 📝 Session not tracked yet, adding to tracked sessions")
-      this.trackedSessionIds.add(sessionID)
+      console.log("[TestAgent] ❌ Session not tracked by this provider, skipping notification")
+      return
     }
 
-    console.log("[TestAgent] ✅ Step 2: Session is tracked")
+    console.log("[TestAgent] ✅ Step 2: Session is tracked by this provider")
 
     // Only notify if webview is hidden (check both sidebar and panel)
     // if (this.isWebviewVisible()) {
@@ -3522,7 +3569,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     this.postMessage({ type: "recentsLoaded", recents: [] })
 
     // Re-fetch notifications to reflect cleared dismissed IDs
-    await this.fetchAndSendNotifications()
+    // await this.fetchAndSendNotifications()
 
     vscode.window.showInformationMessage("TestAgent settings have been reset to defaults.")
   }
@@ -3580,7 +3627,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       this.fetchAndSendSkills(),
       this.fetchAndSendCommands(),
       this.fetchAndSendConfig(),
-      this.fetchAndSendNotifications(),
+      // this.fetchAndSendNotifications(),
     ])
   }
 
@@ -3658,6 +3705,13 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       const sid = event.properties.sessionID
       const error = event.properties.error
       if (sid && error && this.trackedSessionIds.has(sid)) {
+        // Skip notification for MessageAbortedError (user-initiated abort is not an error)
+        const isAbortError =
+          typeof error === "object" && error !== null && "name" in error && error.name === "MessageAbortedError"
+        if (isAbortError) {
+          return
+        }
+
         // Extract error message from the error object
         const errorMsg =
           typeof error === "string"

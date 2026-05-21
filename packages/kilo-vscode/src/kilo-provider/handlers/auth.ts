@@ -62,8 +62,12 @@ export async function handleLogin(ctx: AuthContext, attempt: number, getAttempt:
     await ctx.disposeGlobal()
 
     // Step 3: Fetch profile and push to webview
-    const { data: profile } = await ctx.client.kilo.profile(undefined, { throwOnError: true })
-    ctx.postMessage({ type: "profileData", data: profile })
+    // testagent_change start - disable profile API (not available in testagent backend)
+    // const { data: profile } = await ctx.client.kilo.profile(undefined, { throwOnError: true })
+    // ctx.postMessage({ type: "profileData", data: profile })
+    console.log("[TestAgent]  🔐 Skipping profile fetch (not available)")
+    ctx.postMessage({ type: "profileData", data: null })
+    // testagent_change end
     ctx.postMessage({ type: "deviceAuthComplete" })
   } catch (error) {
     if (attempt !== getAttempt()) return
@@ -110,8 +114,12 @@ export async function handleSetOrganization(ctx: AuthContext, organizationId: st
     console.error("[TestAgent]  Failed to switch organization:", error)
     // Re-fetch current profile to reset webview state — best-effort
     try {
-      const result = await ctx.client.kilo.profile()
-      ctx.postMessage({ type: "profileData", data: result.data ?? null })
+      // testagent_change start - disable profile API (not available in testagent backend)
+      // const result = await ctx.client.kilo.profile()
+      // ctx.postMessage({ type: "profileData", data: result.data ?? null })
+      console.log("[TestAgent]  👤 Skipping profile refresh (not available)")
+      ctx.postMessage({ type: "profileData", data: null })
+      // testagent_change end
     } catch (profileError) {
       console.error("[TestAgent]  Failed to refresh profile after org switch error:", profileError)
     }
@@ -122,8 +130,12 @@ export async function handleSetOrganization(ctx: AuthContext, organizationId: st
 
   // Org switch succeeded — refresh profile and providers independently (best-effort)
   try {
-    const result = await ctx.client.kilo.profile()
-    ctx.postMessage({ type: "profileData", data: result.data ?? null })
+    // testagent_change start - disable profile API (not available in testagent backend)
+    // const result = await ctx.client.kilo.profile()
+    // ctx.postMessage({ type: "profileData", data: result.data ?? null })
+    console.log("[TestAgent]  👤 Skipping profile refresh after org switch (not available)")
+    ctx.postMessage({ type: "profileData", data: null })
+    // testagent_change end
   } catch (error) {
     console.error("[TestAgent]  Failed to refresh profile after org switch:", error)
   }
@@ -143,7 +155,11 @@ export async function handleSetOrganization(ctx: AuthContext, organizationId: st
 export async function handleRefreshProfile(ctx: AuthContext): Promise<void> {
   if (!ctx.client) return
 
-  console.log("[TestAgent]  🔄 Refreshing profile...")
-  const result = await ctx.client.kilo.profile().catch(() => ({ data: null }))
-  ctx.postMessage({ type: "profileData", data: result.data ?? null })
+  // testagent_change start - disable profile API (not available in testagent backend)
+  // console.log("[TestAgent]  🔄 Refreshing profile...")
+  // const result = await ctx.client.kilo.profile().catch(() => ({ data: null }))
+  // ctx.postMessage({ type: "profileData", data: result.data ?? null })
+  console.log("[TestAgent]  🔄 Skipping profile refresh (not available)")
+  ctx.postMessage({ type: "profileData", data: null })
+  // testagent_change end
 }
