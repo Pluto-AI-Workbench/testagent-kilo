@@ -4,6 +4,10 @@ import type { ChildProcess } from "child_process"
 import * as readline from "readline"
 import { TestflowMessageBridge } from "./testflow-bridge"
 
+// Strip ANSI escape codes (colors, cursor moves, etc.) from terminal output
+const ANSI_RE = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><~]/g
+const stripAnsi = (s: string) => s.replace(ANSI_RE, "")
+
 export interface SdtRunnerOpts {
   cmd: string
   args: string[]
@@ -47,12 +51,12 @@ export class SdtRunner {
         const event = JSON.parse(line) as JsonLine
         this.dispatch(event)
       } catch {
-        this.bridge.onText(line)
+        this.bridge.onText(stripAnsi(line))
       }
     })
 
     this.proc.stderr?.on("data", (chunk: Buffer) => {
-      const text = chunk.toString().trim()
+      const text = stripAnsi(chunk.toString().trim())
       if (text) this.bridge.onLog("error", text)
     })
 

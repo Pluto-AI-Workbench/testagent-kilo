@@ -286,6 +286,8 @@ export class TestflowMessageBridge {
         id: this.logPartID,
         messageID: this.asstMsgID,
         text: this.logText,
+        // Mark as testflow log so the webview can render it with pre-wrap styling
+        testflow: true,
       },
     })
   }

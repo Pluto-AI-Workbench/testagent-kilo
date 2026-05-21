@@ -34,6 +34,10 @@ export const UPSTREAM_SUPPRESSED_TOOLS = new Set(["todowrite", "todoread"])
 // so they render without the McpTool card wrapper.
 const TESTFLOW_TOOLS = new Set(["testflow-step", "testflow-question", "testflow-agent"])
 
+function checkTestflowLog(part: SDKPart): boolean {
+  return part.type === "text" && !!(part as SDKPart & { testflow?: boolean }).testflow
+}
+
 function isRenderable(part: SDKPart): boolean {
   if (part.type === "tool") {
     const tool = (part as SDKPart & { tool: string }).tool
@@ -198,6 +202,7 @@ export const AssistantMessage: Component<AssistantMessageProps> = (props) => {
           // testagent_change start - testflow tools bypass ToolPartDisplay entirely
           const isTestflow =
             part.type === "tool" && TESTFLOW_TOOLS.has((part as SDKPart & { tool: string }).tool)
+          const isTestflowLog = checkTestflowLog(part)
           // testagent_change end
 
           // Upstream PART_MAPPING["tool"] returns null for todowrite/todoread,
@@ -212,44 +217,48 @@ export const AssistantMessage: Component<AssistantMessageProps> = (props) => {
           const activeSuggestion = createMemo(() => matchToolRequest(part, "suggest", session.suggestions()))
 
           return (
-            <Show when={isTestflow || isUpstreamSuppressed || activeQuestion() || activeSuggestion() || PART_MAPPING[part.type]}>
+            <Show when={isTestflow || isTestflowLog || isUpstreamSuppressed || activeQuestion() || activeSuggestion() || PART_MAPPING[part.type]}>
               {/* testagent_change start - testflow tools render outside tool-part-wrapper */}
-              <Show when={isTestflow} fallback={
-                <div data-component="tool-part-wrapper" data-part-type={part.type}>
-                  <Show
-                    when={activeQuestion()}
-                    fallback={
-                      <Show
-                        when={activeSuggestion()}
-                        fallback={
-                          <Show
-                            when={isUpstreamSuppressed}
-                            fallback={
-                              <Part
-                                part={part}
-                                message={props.message as SDKMessage}
-                                showAssistantCopyPartID={props.showAssistantCopyPartID}
-                                animate={
-                                  part.type === "tool" &&
-                                  ((part as unknown as ToolPart).state?.status === "pending" ||
-                                    (part as unknown as ToolPart).state?.status === "running")
-                                }
-                              />
-                            }
-                          >
-                            <TodoToolCard part={part as unknown as ToolPart} />
-                          </Show>
-                        }
-                      >
-                        {(req) => <SuggestBar request={req()} />}
-                      </Show>
-                    }
-                  >
-                    {(req) => <QuestionDock request={req()} />}
-                  </Show>
-                </div>
+              <Show when={isTestflowLog} fallback={
+                <Show when={isTestflow} fallback={
+                  <div data-component="tool-part-wrapper" data-part-type={part.type}>
+                    <Show
+                      when={activeQuestion()}
+                      fallback={
+                        <Show
+                          when={activeSuggestion()}
+                          fallback={
+                            <Show
+                              when={isUpstreamSuppressed}
+                              fallback={
+                                <Part
+                                  part={part}
+                                  message={props.message as SDKMessage}
+                                  showAssistantCopyPartID={props.showAssistantCopyPartID}
+                                  animate={
+                                    part.type === "tool" &&
+                                    ((part as unknown as ToolPart).state?.status === "pending" ||
+                                      (part as unknown as ToolPart).state?.status === "running")
+                                  }
+                                />
+                              }
+                            >
+                              <TodoToolCard part={part as unknown as ToolPart} />
+                            </Show>
+                          }
+                        >
+                          {(req) => <SuggestBar request={req()} />}
+                        </Show>
+                      }
+                    >
+                      {(req) => <QuestionDock request={req()} />}
+                    </Show>
+                  </div>
+                }>
+                  <TestflowToolCard part={part as unknown as ToolPart} />
+                </Show>
               }>
-                <TestflowToolCard part={part as unknown as ToolPart} />
+                <pre class="testflow-log">{(part as SDKPart & { text: string }).text}</pre>
               </Show>
               {/* testagent_change end */}
             </Show>
