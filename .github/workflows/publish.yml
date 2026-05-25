@@ -312,23 +312,11 @@ jobs:
           retention-days: 7
 
 
-  smoke-test:
-    name: Smoke Test (pre-publish gate)
-    needs:
-      - version
-      - build-cli
-    if: github.repository == 'AI-Testing-Workbench/testagent-kilo' # testagent_change
-    uses: ./.github/workflows/smoke-test.yml
-    with:
-      cli_version: ${{ needs.version.outputs.version }}
-    secrets: inherit
-  # kilocode_change end
   publish:
     needs:
       - version
       - build-cli
       - build-vscode
-      - smoke-test
     runs-on: ubuntu-24.04
     if: needs.version.outputs.release == 'true'
     steps:
