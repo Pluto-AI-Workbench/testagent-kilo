@@ -61,6 +61,11 @@ jobs:
 
       - id: version
         run: |
+          echo "🔍 Debug Script values:"
+          echo "  Script.version: ${Script.version:-not set}"
+          echo "  Script.preview: ${Script.preview:-not set}"
+          echo "  Script.channel: ${Script.channel:-not set}"
+          echo ""
           ./script/version.ts
         env:
           GH_TOKEN: ${{ github.token }}
@@ -355,8 +360,18 @@ jobs:
       - build-cli
       - build-vscode
     runs-on: ubuntu-24.04
-    if: needs.version.outputs.release != ''  # testagent_change - check if release exists (not == 'true')
+    # testagent_change - always run publish if version task succeeded
+    if: always() && needs.version.result == 'success' && needs.build-cli.result == 'success' && needs.build-vscode.result == 'success'
     steps:
+      # testagent_change - debug: show version outputs
+      - name: Debug version outputs
+        run: |
+          echo "📋 Version outputs:"
+          echo "  version: ${{ needs.version.outputs.version }}"
+          echo "  release: ${{ needs.version.outputs.release }}"
+          echo "  tag: ${{ needs.version.outputs.tag }}"
+          echo "  repo: ${{ needs.version.outputs.repo }}"
+
       - uses: actions/checkout@v3
         with:
           submodules: recursive
@@ -381,8 +396,15 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: testagent-vscode-*
-          path: packages/kilo-vscode/out
-          merge-multiple: true
+          path: packages/kilo-vscode/artifacts
+
+      # testagent_change - move VSIX files from artifact subdirectories to out/
+      - name: Organize VSIX files
+        run: |
+          mkdir -p packages/kilo-vscode/out
+          find packages/kilo-vscode/artifacts -name "*.vsix" -exec mv {} packages/kilo-vscode/out/ \;
+          echo "✅ VSIX files organized"
+          ls -lh packages/kilo-vscode/out/
 
       # testagent_change - debug: list downloaded VSIX files
       - name: List downloaded VSIX files
@@ -435,9 +457,20 @@ jobs:
       # 上传 VSIX 到 GitHub Release
       - name: Upload VSIX to GitHub Release
         run: |
+          echo "📦 Uploading VSIX files to release v${{ needs.version.outputs.version }}..."
+          echo "📂 Files to upload:"
+          ls -lh packages/kilo-vscode/out/*.vsix || {
+            echo "❌ No VSIX files found!"
+            echo "Directory contents:"
+            ls -la packages/kilo-vscode/out/ || echo "Directory doesn't exist"
+            exit 1
+          }
+          
           gh release upload v${{ needs.version.outputs.version }} \
             packages/kilo-vscode/out/*.vsix \
             --clobber \
             --repo ${{ github.repository }}
+          
+          echo "✅ VSIX files uploaded successfully"
         env:
           GH_TOKEN: ${{ steps.committer.outputs.token }}
