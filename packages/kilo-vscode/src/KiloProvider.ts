@@ -2910,21 +2910,25 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       return
     }
 
-    const sid = sessionID ?? this.currentSession?.id ?? ""
-    const workspaceDir = this.getContextDirectory()
+    // Ensure a session exists (creates one if needed, notifies webview via sessionCreated)
+    const resolved = await this.resolveSession(sessionID)
+    if (!resolved) {
+      void vscode.window.showErrorMessage("TestAgent: Not connected to CLI backend")
+      return
+    }
 
     this.sdtRunner.run({
       cmd: "run",
       args,
-      cwd: workspaceDir,
+      cwd: resolved.dir,
       env: {
         OPENCODE_SERVER_URL: serverConfig.baseUrl,
         OPENCODE_SERVER_PASSWORD: serverConfig.password,
-        OPENCODE_SESSION_ID: sid,
+        OPENCODE_SESSION_ID: resolved.sid,
         OPENCODE_PROVIDER_ID: providerID || "",
         OPENCODE_MODEL_ID: modelID || "",
       },
-      sessionID: sid,
+      sessionID: resolved.sid,
       userText: `/sdt-run ${args.join(" ")}`.trim(),
       post: (msg) => this.postMessage(msg),
     })
