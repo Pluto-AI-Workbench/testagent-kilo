@@ -252,7 +252,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: testagent-cli-${{ matrix.cli_target }}
-          path: packages/kilo-vscode/bin
+          path: packages/kilo-vscode
 
       - name: Set executable permissions (Unix)
         if: steps.should_build.outputs.build == 'true' && matrix.binary != 'testagent.exe'
@@ -352,7 +352,6 @@ jobs:
         with:
           pattern: testagent-cli-*
           path: packages/testagent-core/packages/opencode/dist
-          merge-multiple: true
 
       # 下载 VS Code 插件产物
       - uses: actions/download-artifact@v4
@@ -366,14 +365,24 @@ jobs:
         run: |
           cd packages/testagent-core/packages/opencode
 
-          for dir in dist/testagent-*; do
-            [ -d "$dir" ] || continue
-            platform=$(basename "$dir")
+          for artifact_dir in dist/testagent-cli-*/; do
+            [ -d "$artifact_dir" ] || continue
+            artifact=$(basename "$artifact_dir")
+            target=${artifact#testagent-cli-}
 
-            if [[ "$platform" == *windows* ]]; then
-              (cd "$dir/bin" && zip -r "../../${platform}.zip" .)
+            # map build target to output_dir naming convention
+            case "$target" in
+              win32-x64)   plat="testagent-windows-x64-baseline" ;;
+              win32-arm64) plat="testagent-windows-arm64" ;;
+              alpine-x64)  plat="testagent-linux-x64-musl" ;;
+              alpine-arm64) plat="testagent-linux-arm64-musl" ;;
+              *)           plat="testagent-${target}" ;;
+            esac
+
+            if [[ "$target" == win32-* ]]; then
+              (cd "$artifact_dir/bin" && zip -r "../../dist/${plat}.zip" .)
             else
-              tar -czf "dist/${platform}.tar.gz" -C "$dir/bin" .
+              tar -czf "dist/${plat}.tar.gz" -C "$artifact_dir/bin" .
             fi
           done
 
