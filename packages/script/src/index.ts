@@ -30,9 +30,11 @@ const CHANNEL = await (async () => {
   // kilocode_change start - publish to "rc" channel for pre-releases
   if (env.KILO_PRE_RELEASE === "true") return "rc"
   // kilocode_change end
+  // testagent_change - default to "latest" for formal releases
   if (env.KILO_BUMP) return "latest" // kilocode_change
   if (env.KILO_VERSION && !env.KILO_VERSION.startsWith("0.0.0-")) return "latest" // kilocode_change
-  return await $`git branch --show-current`.text().then((x) => x.trim().replace(/[^0-9A-Za-z-]/g, "-")) // kilocode_change
+  return "latest" // testagent_change - always use "latest" by default
+  // return await $`git branch --show-current`.text().then((x) => x.trim().replace(/[^0-9A-Za-z-]/g, "-")) // kilocode_change
 })()
 const IS_PREVIEW = CHANNEL !== "latest"
 
@@ -101,6 +103,7 @@ const VERSION = await (async () => {
     return `0.0.0-${CHANNEL}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}`
   }
   const version = await fetchHighest() // kilocode_change
+  // testagent_change - default to patch bump if KILO_BUMP not set
   return bumpVersion(version, env.KILO_BUMP?.toLowerCase() ?? "patch") // kilocode_change
 })()
 
