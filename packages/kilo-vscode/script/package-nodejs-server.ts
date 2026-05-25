@@ -204,8 +204,13 @@ if (!skipVsix) {
   const vsixName = targetPlatform
     ? `testagent-nodejs-vscode-${targetPlatform}.vsix`
     : "testagent-nodejs-vscode.vsix"
-  const vsceArgs = targetPlatform ? `--target ${targetPlatform}` : ""
-  await $`cd ${ROOT} && npx @vscode/vsce package --no-dependencies ${vsceArgs} -o ${vsixName}`.quiet()
+  
+  // Build vsce command with proper argument handling
+  if (targetPlatform) {
+    await $`cd ${ROOT} && npx @vscode/vsce package --no-dependencies --target ${targetPlatform} -o ${vsixName}`
+  } else {
+    await $`cd ${ROOT} && npx @vscode/vsce package --no-dependencies -o ${vsixName}`
+  }
 }
 
 console.log("\n✅ Node.js Server VSIX build complete!")
