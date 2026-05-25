@@ -291,7 +291,6 @@ jobs:
         working-directory: ./packages/kilo-vscode
         env:
           npm_config_ignore_scripts: "true"
-          KILO_VERSION: ${{ needs.build-cli.outputs.version }}
 
       - name: Verify VSIX package
         if: steps.should_build.outputs.build == 'true'
