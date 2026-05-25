@@ -236,6 +236,32 @@ export class TestflowMessageBridge {
     this.agentPartID = ""
   }
 
+  onResponsePart(sessionID: string, messageID: string, sequence: number, part: any): void {
+    // Check if this is a task tool part - trigger child session sync if so
+    if (part.type === 'tool' && part.tool === 'task') {
+      const childSessionId = part.state?.metadata?.sessionId
+      if (childSessionId) {
+        this.post?.({
+          type: "testflow.syncChildSession",
+          sessionID: childSessionId,
+        })
+      }
+    }
+
+    // Forward part to webview
+    this.post?.({
+      type: "partUpdated",
+      sessionID: this.sessionID,
+      messageID: this.asstMsgID,
+      sequence,
+      part: {
+        ...part,
+        id: part.id || uid(),
+        messageID: this.asstMsgID,
+      },
+    })
+  }
+
   onLog(level: string, message: string): void {
     this.appendLog(`${level === "error" ? "! " : ""}${message}`)
   }

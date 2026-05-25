@@ -2774,6 +2774,7 @@ export type WebviewMessage =
   | TestflowQuestionReplyMessage
   | TestflowQuestionRejectMessage
   | TestflowAbortMessage
+  | TestflowSyncChildSessionMessage
   // testagent_change end
 
 // ============================================
@@ -2861,6 +2862,11 @@ export interface TestflowQuestionRejectMessage {
 export interface TestflowAbortMessage {
   type: "testflow.abort"
   sessionID?: string
+}
+
+export interface TestflowSyncChildSessionMessage {
+  type: "testflow.syncChildSession"
+  sessionID: string
 }
 // testagent_change end
 

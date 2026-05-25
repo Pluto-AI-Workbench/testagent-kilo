@@ -28,16 +28,26 @@ export class SdtRunner {
   private running = false
 
   run(opts: SdtRunnerOpts): void {
+    console.log('[TestAgent] SdtRunner.run called:', { cmd: opts.cmd, args: opts.args, cwd: opts.cwd, sessionID: opts.sessionID })
+    
     if (this.running) {
+      console.log('[TestAgent] SdtRunner already running, aborting')
       // Notify via bridge so the error appears inline in the chat
       opts.post({ type: "testflow.error", sessionID: opts.sessionID, error: "Another testflow process is already running" })
       return
     }
 
+    console.log('[TestAgent] Starting testflow process...')
     this.running = true
     this.bridge.start({ sessionID: opts.sessionID, userText: opts.userText, userMessageID: opts.userMessageID, post: opts.post })
 
-    this.proc = spawn("testflow", [opts.cmd, ...opts.args], {
+    // Use local testflow from workspace instead of global
+    const path = require('path')
+    const testflowPath = path.join(opts.cwd, 'testflow', 'bin', 'run.js')
+    console.log('[TestAgent] Using local testflow:', testflowPath)
+    console.log('[TestAgent] Spawning testflow:', { cmd: "node", args: [testflowPath, opts.cmd, ...opts.args], cwd: opts.cwd })
+    
+    this.proc = spawn("node", [testflowPath, opts.cmd, ...opts.args], {
       cwd: opts.cwd,
       env: { ...process.env, ...opts.env, KILO_INTEGRATION: "1" },
       stdio: ["pipe", "pipe", "pipe"],
@@ -46,26 +56,32 @@ export class SdtRunner {
 
     const rl = readline.createInterface({ input: this.proc.stdout!, terminal: false })
     rl.on("line", (line) => {
+      console.log('[TestAgent] testflow stdout:', line)
       if (!line.trim()) return
       try {
         const event = JSON.parse(line) as JsonLine
+        console.log('[TestAgent] testflow event:', event.type)
         this.dispatch(event)
       } catch {
+        console.log('[TestAgent] testflow non-JSON output:', line)
         this.bridge.onText(stripAnsi(line))
       }
     })
 
     this.proc.stderr?.on("data", (chunk: Buffer) => {
       const text = stripAnsi(chunk.toString().trim())
+      console.log('[TestAgent] testflow stderr:', text)
       if (text) this.bridge.onLog("error", text)
     })
 
     this.proc.on("close", (code) => {
+      console.log('[TestAgent] testflow process closed:', code)
       this.bridge.onDone(code ?? 0)
       this.cleanup()
     })
 
     this.proc.on("error", (err) => {
+      console.log('[TestAgent] testflow process error:', err.message)
       this.bridge.onError(err.message)
       this.bridge.onDone(1)
       this.cleanup()
@@ -135,6 +151,14 @@ export class SdtRunner {
         break
       case "done":
         // handled by proc.on("close")
+        break
+      case "response_part":
+        this.bridge.onResponsePart(
+          event.sessionID as string,
+          event.messageID as string,
+          event.sequence as number,
+          event.part as any,
+        )
         break
       default:
         this.bridge.onText(JSON.stringify(event))

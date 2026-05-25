@@ -510,6 +510,40 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
   }
 
   /**
+   * Sync a child session to the webview - fetches session info and loads messages.
+   * Called when testflow detects a task tool part with a child session ID.
+   */
+  private async syncChildSession(sessionID: string): Promise<void> {
+    const client = this.client
+    if (!client) return
+
+    try {
+      const { data: session } = await client.session.get({ sessionID })
+      if (!session) {
+        console.warn(`[Testflow] Child session ${sessionID} not found`)
+        return
+      }
+
+      // Register session in webview
+      this.postMessage({
+        type: "sessionCreated",
+        session: {
+          id: session.id,
+          title: session.title,
+          parentID: session.parentID,
+          directory: session.directory,
+          createdAt: new Date().toISOString(),
+        },
+      })
+
+      // Load session messages
+      await this.loadMessages(sessionID)
+    } catch (err) {
+      console.error(`[Testflow] Failed to sync child session ${sessionID}:`, err)
+    }
+  }
+
+  /**
    * Register a directory override for a session (e.g., worktree path).
    * When set, all operations for this session use this directory instead of the workspace root.
    */
@@ -660,6 +694,9 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
           break
         case "testflow.abort":
           this.sdtRunner.abort()
+          break
+        case "testflow.syncChildSession":
+          await this.syncChildSession(message.sessionID)
           break
         // testagent_change end
         case "revertSession":
@@ -2833,6 +2870,8 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
   }
 
   private async handleSdtTestCommand(args: string[], sessionID?: string, providerID?: string, modelID?: string, messageID?: string): Promise<void> {
+    console.log('[TestAgent] handleSdtTestCommand called:', { args, sessionID, providerID, modelID, messageID })
+    
     const serverConfig = this.connectionService.getServerConfig()
     if (!serverConfig) {
       void vscode.window.showErrorMessage("TestAgent: Not connected to CLI backend")
@@ -2886,6 +2925,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
         OPENCODE_MODEL_ID: modelID || "",
       },
       sessionID: sid,
+      userText: `/sdt-run ${args.join(" ")}`.trim(),
       post: (msg) => this.postMessage(msg),
     })
   }
