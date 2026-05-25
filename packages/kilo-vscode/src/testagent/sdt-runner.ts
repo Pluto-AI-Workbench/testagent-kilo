@@ -41,13 +41,11 @@ export class SdtRunner {
     this.running = true
     this.bridge.start({ sessionID: opts.sessionID, userText: opts.userText, userMessageID: opts.userMessageID, post: opts.post })
 
-    // Use local testflow from workspace instead of global
-    const path = require('path')
-    const testflowPath = path.join(opts.cwd, 'testflow', 'bin', 'run.js')
-    console.log('[TestAgent] Using local testflow:', testflowPath)
-    console.log('[TestAgent] Spawning testflow:', { cmd: "node", args: [testflowPath, opts.cmd, ...opts.args], cwd: opts.cwd })
-    
-    this.proc = spawn("node", [testflowPath, opts.cmd, ...opts.args], {
+    // Use global testflow CLI
+    console.log('[TestAgent] Using global testflow CLI')
+    console.log('[TestAgent] Spawning testflow:', { cmd: "testflow", args: [opts.cmd, ...opts.args], cwd: opts.cwd })
+
+    this.proc = spawn("testflow", [opts.cmd, ...opts.args], {
       cwd: opts.cwd,
       env: { ...process.env, ...opts.env, KILO_INTEGRATION: "1" },
       stdio: ["pipe", "pipe", "pipe"],
