@@ -242,7 +242,7 @@ export const VscodeSessionTurn: Component<VscodeSessionTurnProps> = (props) => {
                   "padding": "4px 8px",
                   "opacity": "0.8"
                 }}>
-                  <Tooltip placement="top" value={(() => {
+                  <Tooltip placement="top-start" value={(() => {
                     const stats = turnStats()!
                     const parts: string[] = []
                     parts.push(`输入: ${stats.inputTokens.toLocaleString()}`)
@@ -258,9 +258,8 @@ export const VscodeSessionTurn: Component<VscodeSessionTurnProps> = (props) => {
                     parts.push(`输出: ${stats.outputTokens.toLocaleString()}`)
                     return parts.join(" | ")
                   })()}>
-                    <span>
-                      本轮对话消耗token: {turnStats()!.totalTokens.toLocaleString()}
-                      {turnStats()!.duration && ` | 耗时: ${turnStats()!.duration}`}
+                    <span style={{"cursor":"pointer"}}>
+                      本轮对话消耗token: {turnStats()!.totalTokens.toLocaleString()} {turnStats()!.duration && ` | 耗时: ${turnStats()!.duration}`}
                     </span>
                   </Tooltip>
                 </div>
