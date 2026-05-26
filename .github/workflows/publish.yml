@@ -43,16 +43,15 @@ jobs:
         with:
           ref: ${{ inputs.branch || github.ref }}
           fetch-depth: 0
-          submodules: recursive  
+          submodules: recursive
 
-      - uses: ./.github/actions/setup-bun
+      # testagent_change - use --ignore-scripts to avoid postinstall failure (bunfig preload issue)
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
 
-      # kilocode_change start - install deps for version script workspace resolution
       - name: Install dependencies
         run: bun install --ignore-scripts
-
-      # testagent_change - removed: bun i -g @kilocode/cli (not needed for version script)
-      # kilocode_change end
 
       - id: version
         run: |
@@ -110,7 +109,7 @@ jobs:
         run: |
           PLATFORM="${{ inputs.platform }}"
           TARGET="${{ matrix.target }}"
-          
+
           if [ "$PLATFORM" = "all" ] || [ -z "$PLATFORM" ] || [ "$PLATFORM" = "$TARGET" ]; then
             echo "build=true" >> $GITHUB_OUTPUT
             echo "✅ Building $TARGET"
@@ -214,7 +213,7 @@ jobs:
         run: |
           PLATFORM="${{ inputs.platform }}"
           TARGET="${{ matrix.target }}"
-          
+
           if [ "$PLATFORM" = "all" ] || [ -z "$PLATFORM" ] || [ "$PLATFORM" = "$TARGET" ]; then
             echo "build=true" >> $GITHUB_OUTPUT
             echo "✅ Building VSIX for $TARGET"
@@ -228,7 +227,7 @@ jobs:
         if: steps.should_build.outputs.build == 'true'
         with:
           ref: ${{ inputs.branch || github.ref }}
-          submodules: recursive  # testagent_change - checkout submodules (testagent-core)
+          submodules: recursive # testagent_change - checkout submodules (testagent-core)
 
       - uses: ./.github/actions/setup-bun
         if: steps.should_build.outputs.build == 'true'
@@ -256,7 +255,7 @@ jobs:
           fi
           echo "✅ testagent-core dependencies installed"
 
-       # testagent_change - download CLI binary for dual-runtime support
+        # testagent_change - download CLI binary for dual-runtime support
       - name: Download CLI binary for ${{ matrix.target }}
         if: steps.should_build.outputs.build == 'true'
         uses: actions/download-artifact@v4
@@ -285,8 +284,6 @@ jobs:
           cd packages/testagent-core/packages/nodejs-server
           OPENCODE_CHANNEL=latest bun run build
           echo "✅ Node.js server built"
-
-     
 
       # testagent_change - cache nodejs-server node_modules
       - name: Get nodejs-server package.json hash
@@ -335,14 +332,12 @@ jobs:
           echo "✅ VSIX package built successfully"
           ls -lh "$VSIX_FILE"
       # testagent_change end
-
       - uses: actions/upload-artifact@v4
         if: steps.should_build.outputs.build == 'true'
         with:
           name: testagent-vscode-${{ matrix.target }}
           path: packages/kilo-vscode/testagent-nodejs-tscode-${{ matrix.target }}.vsix
           retention-days: 7
-
 
   publish:
     needs:
@@ -435,12 +430,12 @@ jobs:
             ls -la packages/kilo-vscode/out/ || echo "Directory doesn't exist"
             exit 1
           }
-          
+
           gh release upload v${{ needs.version.outputs.version }} \
             packages/kilo-vscode/out/*.vsix \
             --clobber \
             --repo ${{ github.repository }}
-          
+
           echo "✅ VSIX files uploaded successfully"
         env:
           GH_TOKEN: ${{ github.token }}
