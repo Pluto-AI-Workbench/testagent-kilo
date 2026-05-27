@@ -2,6 +2,7 @@
 import { spawn } from "../util/process"
 import type { ChildProcess } from "child_process"
 import * as readline from "readline"
+import * as path from "path"
 import { TestflowMessageBridge } from "./testflow-bridge"
 
 // Strip ANSI escape codes (colors, cursor moves, etc.) from terminal output
@@ -41,15 +42,17 @@ export class SdtRunner {
     this.running = true
     this.bridge.start({ sessionID: opts.sessionID, userText: opts.userText, userMessageID: opts.userMessageID, post: opts.post })
 
-    // Use global testflow CLI
-    console.log('[TestAgent] Using global testflow CLI')
-    console.log('[TestAgent] Spawning testflow:', { cmd: "testflow", args: [opts.cmd, ...opts.args], cwd: opts.cwd })
+    // Use bundled testflow binary from extension's bin/ directory
+    const extDir = path.resolve(__dirname, '..')
+    const testflowBin = path.join(extDir, 'bin', process.platform === 'win32' ? 'testflow.exe' : 'testflow')
+    console.log('[TestAgent] Using bundled testflow binary:', testflowBin)
+    console.log('[TestAgent] Spawning testflow:', { cmd: testflowBin, args: [opts.cmd, ...opts.args], cwd: opts.cwd })
 
-    this.proc = spawn("testflow", [opts.cmd, ...opts.args], {
+    const testflowResDir = path.join(extDir, 'bin', 'testflow-res')
+    this.proc = spawn(testflowBin, [opts.cmd, ...opts.args], {
       cwd: opts.cwd,
-      env: { ...process.env, ...opts.env, KILO_INTEGRATION: "1" },
+      env: { ...process.env, ...opts.env, KILO_INTEGRATION: "1", _TESTFLOW_RESOURCES_DIR: testflowResDir },
       stdio: ["pipe", "pipe", "pipe"],
-      shell: process.platform === "win32",
     })
 
     const rl = readline.createInterface({ input: this.proc.stdout!, terminal: false })

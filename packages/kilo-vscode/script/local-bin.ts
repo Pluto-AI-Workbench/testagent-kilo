@@ -9,6 +9,8 @@ import { join } from "node:path"
  *   - bun bun:mac      (macOS / linux)
  *   - bun bun:windows  (windows)
  * Those scripts build the binary AND copy it into packages/kilo-vscode/bin/ automatically.
+ *
+ * Also builds testflow via build-testflow.ts.
  */
 // testagent_change start - use testagent-core instead of opencode
 const kiloVscodeDir = join(import.meta.dir, "..")
@@ -30,6 +32,10 @@ async function main() {
   log(`Building CLI binary via '${script}' in packages/testagent-core...`)
   await $`bun run ${script}`.cwd(testagentDir)
   log(`Build complete. Binary copied to ${binDir}`)
+
+  // Build testflow binary
+  log("Building testflow...")
+  await $`bun script/build-testflow.ts`.cwd(kiloVscodeDir)
 }
 
 try {
