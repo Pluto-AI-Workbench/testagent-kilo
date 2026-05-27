@@ -754,6 +754,11 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
         case "previewImage":
           this.handlePreviewImage(message.dataUrl, message.filename)
           break
+        case "exportConversation": // testagent_change
+          this.handleExportConversation(message.markdown, message.title).catch((e) =>
+            console.error("[TestAgent] handleExportConversation failed:", e),
+          )
+          break
         case "openFile":
           if (message.filePath) {
             this.handleOpenFile(message.filePath, message.line, message.column)
@@ -3153,6 +3158,19 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       .then(() => clean())
       .then(open, (err) => console.error("[TestAgent]  Failed to preview image:", err))
   }
+
+  // testagent_change start
+  private async handleExportConversation(markdown: string, title: string): Promise<void> {
+    const uri = await vscode.window.showSaveDialog({
+      filters: { Markdown: ["md"] },
+      defaultUri: vscode.Uri.file(`${title.replace(/[/\\?%*:|"<>]/g, "-")}.md`),
+    })
+    if (uri) {
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(markdown, "utf-8"))
+      void vscode.window.showInformationMessage(`对话已导出到 ${uri.fsPath}`)
+    }
+  }
+  // testagent_change end
 
   /**
    * Handle openFile request from the webview — open a file in the VS Code editor.

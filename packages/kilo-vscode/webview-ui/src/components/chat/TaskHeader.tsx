@@ -34,6 +34,51 @@ export const TaskHeader: Component<TaskHeaderProps> = (props) => {
   const busy = createMemo(() => session.status() === "busy")
   const canCompact = createMemo(() => !busy() && hasMessages() && !!session.selected())
 
+  // testagent_change start - export conversation to markdown
+  const exportConversation = () => {
+    const messages = session.messages()
+    const sessionTitle = title()
+
+    if (messages.length === 0) return
+
+    let md = `# ${sessionTitle}\n\n`
+    md += `导出时间: ${new Date().toLocaleString("zh-CN")}\n\n`
+    md += `---\n\n`
+
+    for (const msg of messages) {
+      const role = msg.role === "user" ? "👤 用户" : "🤖 助手"
+      const ts = msg.createdAt ? new Date(msg.createdAt).toLocaleString("zh-CN") : ""
+
+      md += `## ${role}\n`
+      if (ts) md += `*${ts}*\n\n`
+      if (msg.content) md += `${msg.content}\n\n`
+
+      for (const p of session.getParts(msg.id)) {
+        if (p.type === "text") {
+          md += `${p.text}\n\n`
+        } else if (p.type === "file") {
+          md += `📎 文件: ${p.filename || "附件"} (${p.mime})\n\n`
+        } else if (p.type === "tool") {
+          md += `🔧 工具调用: ${p.tool}\n`
+          if (p.state.status === "completed") md += "```\n" + p.state.output + "\n```\n\n"
+        } else if (p.type === "reasoning") {
+          md += `💭 推理过程:\n${p.text}\n\n`
+        }
+      }
+
+      if (msg.tokens) {
+        md += `*Token 使用: 输入 ${msg.tokens.input}, 输出 ${msg.tokens.output}`
+        if (msg.tokens.reasoning) md += `, 推理 ${msg.tokens.reasoning}`
+        md += `*\n\n`
+      }
+
+      md += `---\n\n`
+    }
+
+    vscode.postMessage({ type: "exportConversation", markdown: md, title: sessionTitle })
+  }
+  // testagent_change end
+
   const fmt = (n: number) => new Intl.NumberFormat(language.locale(), { style: "currency", currency: "USD" }).format(n)
 
   const breakdown = () => session.costBreakdown()
@@ -136,6 +181,7 @@ export const TaskHeader: Component<TaskHeaderProps> = (props) => {
           </svg>
           {title()}
         </div>
+
         <div data-slot="task-header-stats">
           <Show when={cost()}>
             {(c) => (
@@ -154,6 +200,19 @@ export const TaskHeader: Component<TaskHeaderProps> = (props) => {
               </Tooltip>
             )}
           </Show>
+          {/* testagent_change start - export conversation button */}
+          <Show when={hasMessages() && !busy()}>
+            <Tooltip value="导出对话" placement="bottom">
+              <IconButton
+                icon="download"
+                size="small"
+                variant="ghost"
+                onClick={exportConversation}
+                aria-label="导出对话"
+              />
+            </Tooltip>
+          </Show>
+          {/* testagent_change end */}
           <Show when={!props.readonly}>
             <Tooltip value={language.t("command.session.compact")} placement="bottom">
               <IconButton
@@ -192,18 +251,18 @@ export const TaskHeader: Component<TaskHeaderProps> = (props) => {
                 <Show when={tk().input > 0}>
                   <Tooltip value="包含内容：用户的问题/指令、系统提示词（system prompt）、对话历史、上下文信息（如文件内容、代码片段）、工具定义和文档">
                     <span class="task-header-tokens-value">
-                    <Icon name="arrow-up" size="small" />
-                    输入:{fmtNum(tk().input)}  
-                  </span>
+                      <Icon name="arrow-up" size="small" />
+                      输入:{fmtNum(tk().input)}
+                    </span>
                   </Tooltip>
                 </Show>
                 <Show when={tk().output > 0}>
                   <Tooltip value='包含内容：AI 的回复文本、生成的代码、工具调用（function calls）、推理过程'>
 
-                  <span class="task-header-tokens-value">
-                    <Icon name="arrow-down-to-line" size="small" />
-                    输出:{fmtNum(tk().output)}
-                  </span>
+                    <span class="task-header-tokens-value">
+                      <Icon name="arrow-down-to-line" size="small" />
+                      输出:{fmtNum(tk().output)}
+                    </span>
                   </Tooltip>
                 </Show>
                 <Show when={tk().cache?.write && tk().cache!.write > 0}>
