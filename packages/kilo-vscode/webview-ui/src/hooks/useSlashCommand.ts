@@ -173,6 +173,16 @@ export function useSlashCommand(vscode: VSCodeContext, exclude?: Set<string>): S
       description: "执行指定任务的某个阶段",
       hints: ["testflow", "run", "stage"],
     },
+    {
+      name: "sdt-init",
+      description: "初始化 TestFlow 框架全局环境",
+      hints: ["testflow", "init", "setup"],
+    },
+    {
+      name: "sdt-validate",
+      description: "校验流程阶段配置文件的合法性",
+      hints: ["testflow", "validate", "check", "config"],
+    },
     // testagent_change end
   ]
 

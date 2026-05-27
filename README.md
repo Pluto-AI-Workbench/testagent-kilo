@@ -17,6 +17,7 @@ git submodule update --init --recursive
 # 安装依赖
 bun install
 bun install --cwd packages/testagent-core
+bun install --cwd packages/testflow
 ```
 
 ### 2. 启动开发环境
@@ -69,7 +70,7 @@ bun run bun:windows
 ```
 
 ```bash
-# 2. 一键构建 testflow 独立二进制 + 资源文件
+# 2. 构建 testflow 独立二进制 + 资源文件
 cd packages/kilo-vscode
 bun run build:testflow
 ```
@@ -125,10 +126,11 @@ bun run extension
 # 方式 2：手动构建
 cd packages/testagent-core
 bun run bun:mac  # 或 bun:windows
-```
 
-### Q: testflow 的 SDK 依赖是如何管理的？
-testflow 作为 Bun workspace 成员，通过 workspace symlink 直接访问 `@kilocode/sdk`（指向 `packages/sdk/js`）。无需 `npm link`。详见 `packages/testflow/docs/打包与依赖集成方案.md`。
+# 构建 testflow 独立二进制 + 资源文件
+cd packages/kilo-vscode
+bun run build:testflow
+```
 
 ---
 
