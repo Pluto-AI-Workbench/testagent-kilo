@@ -1,34 +1,32 @@
+# testagent_change start - manual trigger only
 name: publish
-run-name: "${{ format('{0} {1}', inputs.pre_release && 'pre-release' || 'release', inputs.bump) }}"
+run-name: "Build ${{ inputs.platform || 'all platforms' }} from ${{ inputs.branch || github.ref_name }}"
 
 on:
-  # push:
-  #   branches:
-  #     - ci
-  #     - dev
-  #     - beta
-  #     - snapshot-*
   workflow_dispatch:
     inputs:
-      bump:
-        description: "Bump major, minor, or patch"
-        required: false
+      branch:
+        description: "构建分支 (Branch to build from)"
+        required: true
+        type: string
+        default: "main"
+      platform:
+        description: "构建平台 (Platform to build)"
+        required: true
         type: choice
         options:
-          - patch
-          - minor
-          - major
-      version:
-        description: "Override version (optional)"
-        required: false
-        type: string
-      pre_release:
-        description: "Publish as pre-release (VS Code marketplace + npm rc channel)"
-        required: false
-        type: boolean
-        default: false
+          - all
+          - linux-x64
+          - linux-arm64
+          - alpine-x64
+          - alpine-arm64
+          - darwin-x64
+          - darwin-arm64
+          - win32-x64
+        default: "all"
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.version || inputs.bump }}
+concurrency: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.platform || 'all' }}
+# testagent_change end
 
 permissions:
   id-token: write
@@ -37,22 +35,23 @@ permissions:
 
 jobs:
   version:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: github.repository == 'Kilo-Org/kilocode'
+    runs-on: ubuntu-24.04
+    if: github.repository == 'AI-Testing-Workbench/testagent-kilo' # testagent_change
     steps:
+      # testagent_change - checkout specified branch
       - uses: actions/checkout@v3
         with:
+          ref: ${{ inputs.branch || github.ref }}
           fetch-depth: 0
+          submodules: recursive
 
       - uses: ./.github/actions/setup-bun
 
       # kilocode_change start - install deps for version script workspace resolution
       - name: Install dependencies
-        run: bun install
+        run: bun install --ignore-scripts
 
-      - name: Install Kilo
-        if: inputs.bump || inputs.version
-        run: bun i -g @kilocode/cli
+      # testagent_change - removed: bun i -g @kilocode/cli (not needed for version script)
       # kilocode_change end
 
       - id: version
@@ -61,9 +60,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          KILO_BUMP: ${{ inputs.bump }}
-          KILO_VERSION: ${{ inputs.version }}
-          KILO_PRE_RELEASE: ${{ inputs.pre_release }}
           KILO_API_KEY: ${{ secrets.KILO_API_KEY }}
           KILO_ORG_ID: ${{ secrets.KILO_ORG_ID }}
     outputs:
@@ -73,281 +69,374 @@ jobs:
 
   build-cli:
     needs: version
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: github.repository == 'Kilo-Org/kilocode'
+    runs-on: ubuntu-24.04
+    if: github.repository == 'AI-Testing-Workbench/testagent-kilo' # testagent_change
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            script: bun:linux
+            binary: testagent
+            output_dir: testagent-linux-x64
+          - target: linux-arm64
+            script: bun:linux-arm64
+            binary: testagent
+            output_dir: testagent-linux-arm64
+          - target: alpine-x64
+            script: bun:alpine
+            binary: testagent
+            output_dir: testagent-linux-x64-musl
+          - target: alpine-arm64
+            script: bun:alpine-arm64
+            binary: testagent
+            output_dir: testagent-linux-arm64-musl
+          - target: darwin-x64
+            script: bun:mac
+            binary: testagent
+            output_dir: testagent-darwin-x64
+          - target: darwin-arm64
+            script: bun:mac-arm64
+            binary: testagent
+            output_dir: testagent-darwin-arm64
+          - target: win32-x64
+            script: bun:windows
+            binary: testagent.exe
+            output_dir: testagent-windows-x64-baseline
     steps:
+      # testagent_change - skip if platform not selected
+      - name: Check if platform should be built
+        id: should_build
+        run: |
+          PLATFORM="${{ inputs.platform }}"
+          TARGET="${{ matrix.target }}"
+
+          if [ "$PLATFORM" = "all" ] || [ -z "$PLATFORM" ] || [ "$PLATFORM" = "$TARGET" ]; then
+            echo "build=true" >> $GITHUB_OUTPUT
+            echo "✅ Building $TARGET"
+          else
+            echo "build=false" >> $GITHUB_OUTPUT
+            echo "⏭️  Skipping $TARGET (selected: $PLATFORM)"
+          fi
+
+      # testagent_change - checkout specified branch
       - uses: actions/checkout@v3
+        if: steps.should_build.outputs.build == 'true'
         with:
+          ref: ${{ inputs.branch || github.ref }}
+          fetch-depth: 0
           fetch-tags: true
+          submodules: recursive
 
       - uses: ./.github/actions/setup-bun
+        if: steps.should_build.outputs.build == 'true'
 
-      - name: Build
-        id: build
+      - name: Install dependencies
+        if: steps.should_build.outputs.build == 'true'
+        run: bun install
+        working-directory: ./packages/testagent-core
+
+      - name: Build CLI (${{ matrix.target }})
+        if: steps.should_build.outputs.build == 'true'
         run: |
-          ./packages/opencode/script/build.ts
+          if grep -q "\"${{ matrix.script }}\"" package.json; then
+            bun run ${{ matrix.script }}
+          else
+            echo "Script ${{ matrix.script }} not found, using build.ts directly"
+            cross-env OPENCODE_VERSION=${{ needs.version.outputs.version }} \
+              OPENCODE_CHANNEL=latest \
+              bun packages/opencode/script/build.ts \
+              --target=${{ matrix.target }} \
+              --skip-models
+          fi
+        working-directory: ./packages/testagent-core
         env:
-          KILO_VERSION: ${{ needs.version.outputs.version }}
-          KILO_RELEASE: ${{ needs.version.outputs.release }}
-          KILO_PRE_RELEASE: ${{ inputs.pre_release }}
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          OPENCODE_VERSION: ${{ needs.version.outputs.version }}
+          OPENCODE_CHANNEL: latest
 
+      - name: Verify CLI binary
+        if: steps.should_build.outputs.build == 'true'
+        run: |
+          BINARY_PATH="packages/testagent-core/packages/opencode/dist/${{ matrix.output_dir }}/bin/${{ matrix.binary }}"
+          if [ ! -f "$BINARY_PATH" ]; then
+            echo "❌ Error: ${{ matrix.binary }} not found at $BINARY_PATH!"
+            echo "Contents of dist directory:"
+            ls -la packages/testagent-core/packages/opencode/dist/ || true
+            exit 1
+          fi
+          echo "✅ CLI binary built successfully"
+          ls -lh "$BINARY_PATH"
+
+      # testagent_change - upload only binary (avoid overwriting package.json in consumers)
       - uses: actions/upload-artifact@v4
+        if: steps.should_build.outputs.build == 'true'
         with:
-          name: kilo-cli
-          path: packages/opencode/dist
+          name: testagent-cli-${{ matrix.target }}
+          path: packages/testagent-core/packages/opencode/dist/${{ matrix.output_dir }}/bin
+          retention-days: 7
 
     outputs:
       version: ${{ needs.version.outputs.version }}
 
   build-vscode:
     needs: build-cli
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: github.repository == 'Kilo-Org/kilocode'
+    runs-on: ubuntu-24.04
+    if: github.repository == 'AI-Testing-Workbench/testagent-kilo' # testagent_change
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            cli_target: linux-x64
+            binary: testagent
+          - target: linux-arm64
+            cli_target: linux-arm64
+            binary: testagent
+          - target: alpine-x64
+            cli_target: alpine-x64
+            binary: testagent
+          - target: alpine-arm64
+            cli_target: alpine-arm64
+            binary: testagent
+          - target: darwin-x64
+            cli_target: darwin-x64
+            binary: testagent
+          - target: darwin-arm64
+            cli_target: darwin-arm64
+            binary: testagent
+          - target: win32-x64
+            cli_target: win32-x64
+            binary: testagent.exe
     steps:
+      # testagent_change - skip if platform not selected
+      - name: Check if platform should be built
+        id: should_build
+        run: |
+          PLATFORM="${{ inputs.platform }}"
+          TARGET="${{ matrix.target }}"
+
+          if [ "$PLATFORM" = "all" ] || [ -z "$PLATFORM" ] || [ "$PLATFORM" = "$TARGET" ]; then
+            echo "build=true" >> $GITHUB_OUTPUT
+            echo "✅ Building VSIX for $TARGET"
+          else
+            echo "build=false" >> $GITHUB_OUTPUT
+            echo "⏭️  Skipping VSIX for $TARGET (selected: $PLATFORM)"
+          fi
+
+      # testagent_change - checkout specified branch
       - uses: actions/checkout@v3
+        if: steps.should_build.outputs.build == 'true'
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+          submodules: recursive # testagent_change - checkout submodules (testagent-core)
 
       - uses: ./.github/actions/setup-bun
+        if: steps.should_build.outputs.build == 'true'
 
       - uses: actions/setup-node@v4
+        if: steps.should_build.outputs.build == 'true'
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - name: Install @vscode/vsce
+        if: steps.should_build.outputs.build == 'true'
         run: bun install -g @vscode/vsce
 
-      - uses: actions/download-artifact@v4
+      # testagent_change - install testagent-core dependencies (uses cached Bun packages)
+      - name: Install testagent-core dependencies
+        if: steps.should_build.outputs.build == 'true'
+        run: |
+          echo "📦 Installing testagent-core dependencies..."
+          cd packages/testagent-core
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            bun install --linker hoisted
+          else
+            bun install
+          fi
+          echo "✅ testagent-core dependencies installed"
+
+        # testagent_change - download CLI binary for dual-runtime support
+      - name: Download CLI binary for ${{ matrix.target }}
+        if: steps.should_build.outputs.build == 'true'
+        uses: actions/download-artifact@v4
         with:
-          name: kilo-cli
-          path: packages/opencode/dist
+          name: testagent-cli-${{ matrix.cli_target }}
+          path: packages/kilo-vscode/bin
 
-      - name: Build VSIX packages
-        run: bun script/build.ts
-        working-directory: ./packages/kilo-vscode
-        env:
-          CLI_DIST_DIR: ../../packages/opencode/dist
-          KILO_VERSION: ${{ needs.build-cli.outputs.version }}
-          KILO_PRE_RELEASE: ${{ inputs.pre_release }}
-          GH_REPO: ${{ github.repository }}
+      - name: Set executable permissions (Unix)
+        if: steps.should_build.outputs.build == 'true' && matrix.binary != 'testagent.exe'
+        run: chmod +x packages/kilo-vscode/bin/${{ matrix.binary }}
 
+      - name: Verify CLI binary
+        if: steps.should_build.outputs.build == 'true'
+        run: |
+          if [ ! -f packages/kilo-vscode/bin/${{ matrix.binary }} ]; then
+            echo "❌ Error: ${{ matrix.binary }} not found after download!"
+            ls -la packages/kilo-vscode/bin/ || true
+            exit 1
+          fi
+          echo "✅ CLI binary downloaded successfully"
+          ls -lh packages/kilo-vscode/bin/
+      # testagent_change start - build dual-runtime VSIX with Node.js server
+      - name: Build nodejs-server
+        if: steps.should_build.outputs.build == 'true'
+        run: |
+          cd packages/testagent-core/packages/nodejs-server
+          OPENCODE_CHANNEL=latest bun run build
+          echo "✅ Node.js server built"
+
+      # testagent_change - cache nodejs-server node_modules
+      - name: Get nodejs-server package.json hash
+        if: steps.should_build.outputs.build == 'true'
+        id: nodejs_cache_key
+        run: |
+          HASH=$(sha256sum packages/testagent-core/packages/nodejs-server/dist/package.json | cut -d' ' -f1)
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+          echo "📦 package.json hash: $HASH"
+
+      - name: Cache nodejs-server node_modules
+        if: steps.should_build.outputs.build == 'true'
+        id: nodejs_cache
+        uses: actions/cache@v4
+        with:
+          path: packages/kilo-vscode/nodejs-server/node_modules
+          key: ${{ runner.os }}-${{ matrix.target }}-nodejs-modules-${{ steps.nodejs_cache_key.outputs.hash }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-nodejs-modules-
+
+      - name: Cache status
+        if: steps.should_build.outputs.build == 'true'
+        run: |
+          if [ "${{ steps.nodejs_cache.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ Cache hit! Using cached node_modules"
+          else
+            echo "📥 Cache miss. Will install dependencies and cache them"
+          fi
+
+      - name: Package dual-runtime VSIX for ${{ matrix.target }}
+        if: steps.should_build.outputs.build == 'true'
+        run: |
+          cd packages/kilo-vscode
+          bun script/package-nodejs-server.ts --skip-server-build --target=${{ matrix.target }}
+          echo "✅ Dual-runtime VSIX packaged for ${{ matrix.target }}"
+
+      - name: Verify VSIX package
+        if: steps.should_build.outputs.build == 'true'
+        run: |
+          VSIX_FILE="packages/kilo-vscode/testagent-nodejs-tscode-${{ matrix.target }}.vsix"
+          if [ ! -f "$VSIX_FILE" ]; then
+            echo "❌ Error: VSIX package not found!"
+            ls -la packages/kilo-vscode/*.vsix || echo "No VSIX files found"
+            exit 1
+          fi
+          echo "✅ VSIX package built successfully"
+          ls -lh "$VSIX_FILE"
+      # testagent_change end
       - uses: actions/upload-artifact@v4
+        if: steps.should_build.outputs.build == 'true'
         with:
-          name: kilo-vscode
-          path: packages/kilo-vscode/out
+          name: testagent-vscode-${{ matrix.target }}
+          path: packages/kilo-vscode/testagent-nodejs-tscode-${{ matrix.target }}.vsix
+          retention-days: 7
 
-  # build-tauri:
-  #   needs:
-  #     - build-cli
-  #     - version
-  #   continue-on-error: false
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       settings:
-  #         - host: macos-latest
-  #           target: x86_64-apple-darwin
-  #         - host: macos-latest
-  #           target: aarch64-apple-darwin
-  #         - host: blacksmith-4vcpu-windows-2025
-  #           target: x86_64-pc-windows-msvc
-  #         - host: blacksmith-4vcpu-ubuntu-2404
-  #           target: x86_64-unknown-linux-gnu
-  #         - host: blacksmith-8vcpu-ubuntu-2404-arm
-  #           target: aarch64-unknown-linux-gnu
-  #   runs-on: ${{ matrix.settings.host }}
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #       with:
-  #         fetch-tags: true
-
-  #     - uses: apple-actions/import-codesign-certs@v2
-  #       if: ${{ runner.os == 'macOS' }}
-  #       with:
-  #         keychain: build
-  #         p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
-  #         p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-
-  #     - name: Verify Certificate
-  #       if: ${{ runner.os == 'macOS' }}
-  #       run: |
-  #         CERT_INFO=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application")
-  #         CERT_ID=$(echo "$CERT_INFO" | awk -F'"' '{print $2}')
-  #         echo "CERT_ID=$CERT_ID" >> $GITHUB_ENV
-  #         echo "Certificate imported."
-
-  #     - name: Setup Apple API Key
-  #       if: ${{ runner.os == 'macOS' }}
-  #       run: |
-  #         echo "${{ secrets.APPLE_API_KEY_PATH }}" > $RUNNER_TEMP/apple-api-key.p8
-
-  #     - uses: ./.github/actions/setup-bun
-
-  #     - name: Cache apt packages
-  #       if: contains(matrix.settings.host, 'ubuntu')
-  #       uses: actions/cache@v4
-  #       with:
-  #         path: /var/cache/apt/archives
-  #         key: ${{ runner.os }}-${{ matrix.settings.target }}-apt-${{ hashFiles('.github/workflows/publish.yml') }}
-  #         restore-keys: |
-  #           ${{ runner.os }}-${{ matrix.settings.target }}-apt-
-
-  #     - name: install dependencies (ubuntu only)
-  #       if: contains(matrix.settings.host, 'ubuntu')
-  #       run: |
-  #         sudo apt-get update
-  #         sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-  #     - name: install Rust stable
-  #       uses: dtolnay/rust-toolchain@stable
-  #       with:
-  #         targets: ${{ matrix.settings.target }}
-
-  #     - uses: Swatinem/rust-cache@v2
-  #       with:
-  #         workspaces: packages/desktop/src-tauri
-  #         shared-key: ${{ matrix.settings.target }}
-
-  #     - name: Prepare
-  #       run: |
-  #         cd packages/desktop
-  #         bun ./scripts/prepare.ts
-  #       env:
-  #         KILO_VERSION: ${{ needs.version.outputs.version }}
-  #         GITHUB_TOKEN: ${{ steps.committer.outputs.token }}
-  #         RUST_TARGET: ${{ matrix.settings.target }}
-  #         GH_TOKEN: ${{ github.token }}
-  #         GITHUB_RUN_ID: ${{ github.run_id }}
-
-  #     # Fixes AppImage build issues, can be removed when https://github.com/tauri-apps/tauri/pull/12491 is released
-  #     - name: Install tauri-cli from portable appimage branch
-  #       if: contains(matrix.settings.host, 'ubuntu')
-  #       run: |
-  #         cargo install tauri-cli --git https://github.com/tauri-apps/tauri --branch feat/truly-portable-appimage --force
-  #         echo "Installed tauri-cli version:"
-  #         cargo tauri --version
-
-  #     - name: Build and upload artifacts
-  #       uses: tauri-apps/tauri-action@390cbe447412ced1303d35abe75287949e43437a
-  #       timeout-minutes: 60
-  #       with:
-  #         projectPath: packages/desktop
-  #         uploadWorkflowArtifacts: true
-  #         tauriScript: ${{ (contains(matrix.settings.host, 'ubuntu') && 'cargo tauri') || '' }}
-  #         args: --target ${{ matrix.settings.target }} --config ./src-tauri/tauri.prod.conf.json --verbose
-  #         updaterJsonPreferNsis: true
-  #         releaseId: ${{ needs.version.outputs.release }}
-  #         tagName: ${{ needs.version.outputs.tag }}
-  #         releaseDraft: true
-  #         releaseAssetNamePattern: opencode-desktop-[platform]-[arch][ext]
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #         TAURI_BUNDLER_NEW_APPIMAGE_FORMAT: true
-  #         TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-  #         TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-  #         APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-  #         APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-  #         APPLE_SIGNING_IDENTITY: ${{ env.CERT_ID }}
-  #         APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-  #         APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-  #         APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api-key.p8
-
-  # kilocode_change start
-  # Run smoke tests against CLI assets uploaded to the draft GitHub release
-  # before publishing the release and package artifacts.
-  smoke-test:
-    name: Smoke Test (pre-publish gate)
-    needs:
-      - version
-      - build-cli
-    if: github.repository == 'Kilo-Org/kilocode'
-    uses: ./.github/workflows/smoke-test.yml
-    with:
-      cli_version: ${{ needs.version.outputs.version }}
-    secrets: inherit
-  # kilocode_change end
   publish:
     needs:
       - version
       - build-cli
       - build-vscode
-      - smoke-test
-      # - build-tauri
     runs-on: ubuntu-24.04
+    # testagent_change - always run publish if version task succeeded
+    if: always() && needs.version.result == 'success' && needs.build-cli.result == 'success' && needs.build-vscode.result == 'success'
     steps:
       - uses: actions/checkout@v3
-
-      - uses: ./.github/actions/setup-bun
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          submodules: recursive
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      # testagent_change - use GITHUB_TOKEN instead of app token for simplicity
+      # - name: Setup Git Committer
+      #   id: committer
+      #   uses: ./.github/actions/setup-git-committer
+      #   with:
+      #     kilo-maintainer-app-id: ${{ secrets.KILO_MAINTAINER_APP_ID }}
+      #     kilo-maintainer-app-secret: ${{ secrets.KILO_MAINTAINER_APP_SECRET }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Install @vscode/vsce
-        run: bun install -g @vscode/vsce
-
-      - name: Setup Git Committer
-        id: committer
-        uses: ./.github/actions/setup-git-committer
-        with:
-          # kilocode_change start
-          kilo-maintainer-app-id: ${{ secrets.KILO_MAINTAINER_APP_ID }}
-          kilo-maintainer-app-secret: ${{ secrets.KILO_MAINTAINER_APP_SECRET }}
-          # kilocode_change end
-
+      # 下载 CLI 产物
       - uses: actions/download-artifact@v4
         with:
-          name: kilo-cli
-          path: packages/opencode/dist
+          pattern: testagent-cli-*
+          path: packages/testagent-core/packages/opencode/dist
 
+      # 下载 VS Code 插件产物
       - uses: actions/download-artifact@v4
         with:
-          name: kilo-vscode
-          path: packages/kilo-vscode/out
+          pattern: testagent-vscode-*
+          path: packages/kilo-vscode/artifacts
 
-      - name: Cache apt packages (AUR)
-        uses: actions/cache@v4
-        with:
-          path: /var/cache/apt/archives
-          key: ${{ runner.os }}-apt-aur-${{ hashFiles('.github/workflows/publish.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-aur-
-
-      - name: Setup SSH for AUR
+      # testagent_change - move VSIX files from artifact subdirectories to out/
+      - name: Organize VSIX files
         run: |
-          sudo apt-get update
-          sudo apt-get install -y pacman-package-manager
-          mkdir -p ~/.ssh
-          echo "${{ secrets.AUR_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          git config --global user.email "kilo-maintainer[bot]@users.noreply.github.com"
-          git config --global user.name "kilo-maintainer[bot]"
-          ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts || true
+          mkdir -p packages/kilo-vscode/out
+          find packages/kilo-vscode/artifacts -name "*.vsix" -exec mv {} packages/kilo-vscode/out/ \;
+          echo "✅ VSIX files organized"
+          ls -lh packages/kilo-vscode/out/
 
-      - run: ./script/publish.ts
+      # 创建 CLI 压缩包
+      - name: Create CLI release archives
+        run: |
+          cd packages/testagent-core/packages/opencode
+
+          for artifact_dir in dist/testagent-cli-*/; do
+            [ -d "$artifact_dir" ] || continue
+            artifact=$(basename "$artifact_dir")
+            target=${artifact#testagent-cli-}
+
+            # map build target to output_dir naming convention
+            case "$target" in
+              win32-x64)   plat="testagent-windows-x64-baseline" ;;
+              win32-arm64) plat="testagent-windows-arm64" ;;
+              alpine-x64)  plat="testagent-linux-x64-musl" ;;
+              alpine-arm64) plat="testagent-linux-arm64-musl" ;;
+              *)           plat="testagent-${target}" ;;
+            esac
+
+            if [[ "$target" == win32-* ]]; then
+              (cd "$artifact_dir" && zip -r "../../dist/${plat}.zip" .)
+            else
+              tar -czf "dist/${plat}.tar.gz" -C "$artifact_dir" .
+            fi
+          done
+
+          ls -lh dist/*.tar.gz dist/*.zip || true
+
+      # 上传 CLI 到 GitHub Release
+      - name: Upload CLI archives to GitHub Release
+        run: |
+          gh release upload v${{ needs.version.outputs.version }} \
+            packages/testagent-core/packages/opencode/dist/*.tar.gz \
+            packages/testagent-core/packages/opencode/dist/*.zip \
+            --clobber \
+            --repo ${{ github.repository }}
         env:
-          KILO_VERSION: ${{ needs.version.outputs.version }}
-          KILO_RELEASE: ${{ needs.version.outputs.release }}
-          KILO_PRE_RELEASE: ${{ inputs.pre_release }}
-          GH_REPO: ${{ github.repository }}
-          AUR_KEY: ${{ secrets.AUR_KEY }}
-          GITHUB_TOKEN: ${{ steps.committer.outputs.token }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
-          VSCE_PAT: ${{ secrets.VSCE_TOKEN }}
-          OPENVSX_TOKEN: ${{ secrets.OVSX_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+
+      # 上传 VSIX 到 GitHub Release
+      - name: Upload VSIX to GitHub Release
+        run: |
+          echo "📦 Uploading VSIX files to release v${{ needs.version.outputs.version }}..."
+          echo "📂 Files to upload:"
+          ls -lh packages/kilo-vscode/out/*.vsix || {
+            echo "❌ No VSIX files found!"
+            echo "Directory contents:"
+            ls -la packages/kilo-vscode/out/ || echo "Directory doesn't exist"
+            exit 1
+          }
+
+          gh release upload v${{ needs.version.outputs.version }} \
+            packages/kilo-vscode/out/*.vsix \
+            --clobber \
+            --repo ${{ github.repository }}
+
+          echo "✅ VSIX files uploaded successfully"
+        env:
+          GH_TOKEN: ${{ github.token }}

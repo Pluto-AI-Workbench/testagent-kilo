@@ -30,7 +30,7 @@ The `publish.yml` workflow runs four jobs sequentially:
 
 ### 2. Build CLI (`build-cli`)
 
-- Runs `packages/opencode/script/build.ts` to compile the Kilo CLI binary.
+- Runs `packages/testagent-core/packages/opencode/script/build.ts` to compile the Kilo CLI binary.
 - Builds native binaries for **all supported platforms and architectures**:
   - Linux: x64, arm64 (glibc and musl), plus baseline (non-AVX2) variants
   - macOS: x64, arm64, plus baseline variants

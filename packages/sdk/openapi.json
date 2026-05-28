@@ -458,7 +458,7 @@
         ]
       }
     },
-    "/kilocode/testagent/user": {
+    "/testagent/user": {
       "put": {
         "operationId": "putKilocodeTestagentUser",
         "parameters": [

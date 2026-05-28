@@ -1836,6 +1836,11 @@ export interface OpenSettingsPanelRequest {
   tab?: string
 }
 
+export interface OpenConfigFileRequest {
+  type: "openConfigFile"
+  scope: "local" | "global"
+}
+
 export interface OpenVSCodeSettingsRequest {
   type: "openVSCodeSettings"
   query: string
@@ -2432,6 +2437,14 @@ export interface PreviewImageRequest {
   filename: string
 }
 
+// testagent_change start
+export interface ExportConversationRequest {
+  type: "exportConversation"
+  markdown: string
+  title: string
+}
+// testagent_change end
+
 // Set default base branch (webview → extension)
 export interface SetDefaultBaseBranchRequest {
   type: "agentManager.setDefaultBaseBranch"
@@ -2627,6 +2640,7 @@ export type WebviewMessage =
   | RefreshProfileRequest
   | OpenExternalRequest
   | OpenSettingsPanelRequest
+  | OpenConfigFileRequest
   | OpenVSCodeSettingsRequest
   | OpenMarketplacePanelRequest
   | OpenFileRequest
@@ -2734,6 +2748,7 @@ export type WebviewMessage =
   | RetryConnectionRequest
   | OpenSubAgentViewerRequest
   | PreviewImageRequest
+  | ExportConversationRequest // testagent_change
   | SetDefaultBaseBranchRequest
   | AgentManagerOpenSessionsMessage
   | FetchMarketplaceDataMessage
