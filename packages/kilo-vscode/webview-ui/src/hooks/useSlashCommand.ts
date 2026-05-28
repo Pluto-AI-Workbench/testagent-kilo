@@ -183,6 +183,16 @@ export function useSlashCommand(vscode: VSCodeContext, exclude?: Set<string>): S
       description: "校验流程阶段配置文件的合法性",
       hints: ["testflow", "validate", "check", "config"],
     },
+    {
+      name: "sdt-switch",
+      description: "切换工作空间内的默认工作任务",
+      hints: ["testflow", "switch", "task"],
+    },
+    {
+      name: "sdt-list",
+      description: "查看当前的任务列表",
+      hints: ["testflow", "list", "tasks"],
+    },
     // testagent_change end
   ]
 
