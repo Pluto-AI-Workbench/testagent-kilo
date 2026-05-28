@@ -28,6 +28,6 @@ if (existsSync(testflowResDir)) rmSync(testflowResDir, { recursive: true })
 mkdirSync(join(testflowResDir, "config"), { recursive: true })
 mkdirSync(join(testflowResDir, "templates"), { recursive: true })
 cpSync(join(testflowDir, "dist", "config", "index.yaml"), join(testflowResDir, "config", "index.yaml"))
-cpSync(join(testflowDir, "dist", "templates"), testflowResDir, { recursive: true })
+cpSync(join(testflowDir, "dist", "templates"), join(testflowResDir,"templates"), { recursive: true })
 
 log(`Done. Binary: ${testflowBin}`)
