@@ -3320,6 +3320,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       prevStatus,
       newStatus,
       isTracked: this.trackedSessionIds.has(sessionID),
+      isChild: this.syncedChildSessions.has(sessionID),
       isVisible: this.isWebviewVisible(),
       trackedSessions: Array.from(this.trackedSessionIds),
     })
@@ -3342,13 +3343,20 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
 
     console.log("[TestAgent] ✅ Step 2: Session is tracked by this provider")
 
+    if (this.syncedChildSessions.has(sessionID)) {
+      console.log("[TestAgent] ❌ Child session completed, skipping notification")
+      return
+    }
+
+    console.log("[TestAgent] ✅ Step 3: Session is not a child session")
+
     // Only notify if webview is hidden (check both sidebar and panel)
     // if (this.isWebviewVisible()) {
     //   console.log("[TestAgent] ❌ Webview is visible, skipping notification")
     //   return
     // }
 
-    console.log("[TestAgent] ✅ Step 3: Webview is hidden")
+    console.log("[TestAgent] ✅ Step 4: Webview is hidden")
 
     // Check if notification is enabled
     const notifications = vscode.workspace.getConfiguration("testagent.new.notifications")
@@ -3360,7 +3368,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       return
     }
 
-    console.log("[TestAgent] ✅ Step 4: Notification is enabled")
+    console.log("[TestAgent] ✅ Step 5: Notification is enabled")
     console.log("[TestAgent] 🎉 All checks passed! Showing notification...")
 
     // Get task name from current session
