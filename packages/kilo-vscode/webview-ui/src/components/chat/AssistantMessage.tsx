@@ -32,7 +32,7 @@ export const UPSTREAM_SUPPRESSED_TOOLS = new Set(["todowrite", "todoread"])
 
 // testagent_change start - testflow tools bypass ToolPartDisplay entirely
 // so they render without the McpTool card wrapper.
-const TESTFLOW_TOOLS = new Set(["testflow-step", "testflow-question", "testflow-agent"])
+const TESTFLOW_TOOLS = new Set(["testflow-step", "testflow-question", "testflow-agent", "testflow-progress"])
 
 function checkTestflowLog(part: SDKPart): boolean {
   return part.type === "text" && !!(part as SDKPart & { testflow?: boolean }).testflow
@@ -177,6 +177,87 @@ function TestflowToolCard(props: { part: ToolPart }) {
             <Icon name="check" size="small" /> Answered
           </span>
         </Show>
+      </div>
+    )
+  }
+
+  // testflow-progress
+  if (props.part.tool === "testflow-progress") {
+    const progInput = () => input() as {
+      taskName: string
+      stages: {
+        stage_id: string
+        stage_name: string
+        status: string
+        execute_end_time: string | null
+        status_icon: string
+        status_text: string
+      }[]
+      completedCount: number
+      totalCount: number
+      percent: number
+      nextHint: string
+      exceptionHint: string | null
+    }
+
+    const statusIcon = (s: string) => {
+      if (s === "completed") return "✓"
+      if (s === "executing" || s === "awaiting_access") return "›"
+      if (s === "skipped") return "⏭"
+      if (s === "exception") return "✗"
+      return "○"
+    }
+
+    const statusText = (s: string) => {
+      if (s === "completed") return "完成"
+      if (s === "executing" || s === "awaiting_access") return "进行中"
+      if (s === "skipped") return "跳过"
+      if (s === "exception") return "异常"
+      return "待开始"
+    }
+
+    const fmtTime = (iso: string | null) => {
+      if (!iso) return null
+      const d = new Date(iso)
+      const mm = (d.getMonth() + 1).toString().padStart(2, "0")
+      const dd = d.getDate().toString().padStart(2, "0")
+      const hh = d.getHours().toString().padStart(2, "0")
+      const mi = d.getMinutes().toString().padStart(2, "0")
+      return `${mm}-${dd} ${hh}:${mi}`
+    }
+
+    return (
+      <div class="testflow-progress">
+        <div class="testflow-progress-title">任务清单 [{progInput().taskName}]</div>
+        <div class="testflow-progress-separator">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
+        <For each={progInput().stages}>
+          {(stage) => (
+            <div class="testflow-progress-stage">
+              <span class="testflow-progress-icon">{statusIcon(stage.status)}</span>
+              <span class="testflow-progress-id">{stage.stage_id}</span>
+              <span class="testflow-progress-name">{stage.stage_name}</span>
+              <span class="testflow-progress-status">{statusText(stage.status)}</span>
+              <Show when={stage.execute_end_time}>
+                <span class="testflow-progress-time">{fmtTime(stage.execute_end_time)}</span>
+              </Show>
+            </div>
+          )}
+        </For>
+        <div class="testflow-progress-separator">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
+        <div class="testflow-progress-footer">
+          <div class="testflow-progress-progress">
+            进度: {progInput().completedCount}/{progInput().totalCount} ({progInput().percent}%)
+          </div>
+          <Show when={progInput().exceptionHint}>
+            <div class="testflow-progress-exception">{progInput().exceptionHint}</div>
+          </Show>
+          <Show when={progInput().nextHint}>
+            <div class="testflow-progress-next">
+              <span>下一步：</span>
+              <span class="testflow-progress-hint">{progInput().nextHint}</span>
+            </div>
+          </Show>
+        </div>
       </div>
     )
   }

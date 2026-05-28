@@ -145,7 +145,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
 
   private webview: vscode.Webview | null = null
   private webviewView: vscode.WebviewView | null = null // testagent_change - store view reference for visibility check
-  
+
   // testagent_change start - System notification service
   private systemNotification: SystemNotificationService
   // testagent_change end
@@ -260,7 +260,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     this.slimEditMetadata = options?.slimEditMetadata ?? true
 
     TelemetryProxy.getInstance().setProvider(this)
-    
+
     // testagent_change start - Initialize system notification service
     this.systemNotification = new SystemNotificationService(extensionUri)
     // testagent_change end
@@ -770,6 +770,9 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
         case "openSettingsPanel":
           vscode.commands.executeCommand("testagent.new.settingsButtonClicked", message.tab)
           break
+        case "openConfigFile":
+          this.handleOpenConfigFile(message.scope)
+          break
         case "openVSCodeSettings":
           vscode.commands.executeCommand("workbench.action.openSettings", message.query)
           break
@@ -804,6 +807,11 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
           break
         case "previewImage":
           this.handlePreviewImage(message.dataUrl, message.filename)
+          break
+        case "exportConversation": // testagent_change
+          this.handleExportConversation(message.markdown, message.title).catch((e) =>
+            console.error("[TestAgent] handleExportConversation failed:", e),
+          )
           break
         case "openFile":
           if (message.filePath) {
@@ -2695,14 +2703,14 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       this.postMessage({ type: "configUpdated", config: merged })
       if (refreshProviders) await this.fetchAndSendProviders()
 
-      // testagent_change: Prompt user to reload window after config save
-      vscode.window
-        .showInformationMessage("配置已保存。是否重新加载窗口以应用更改？", "重新加载", "稍后")
-        .then((choice) => {
-          if (choice === "重新加载") {
-            vscode.commands.executeCommand("workbench.action.reloadWindow")
-          }
-        })
+      // testagent_change: Prompt user to reload window after config save  注释掉
+      // vscode.window
+      //   .showInformationMessage("配置已保存。是否重新加载窗口以应用更改？", "重新加载", "稍后")
+      //   .then((choice) => {
+      //     if (choice === "重新加载") {
+      //       vscode.commands.executeCommand("workbench.action.reloadWindow")
+      //     }
+      //   })
     } catch (error) {
       console.error("[TestAgent]  Config write succeeded but post-write refresh failed:", error)
       const cached = (this.cachedConfigMessage as { config?: unknown } | null)?.config
@@ -2834,7 +2842,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     }
 
     if (cmd === "run") {
-      await this.handleSdtRunCommand(args, sessionID, providerID, modelID)
+      await this.handleSdtRunCommand(args, sessionID, providerID, modelID, messageID)
       return
     }
 
@@ -2903,7 +2911,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     })
   }
 
-  private async handleSdtRunCommand(args: string[], sessionID?: string, providerID?: string, modelID?: string): Promise<void> {
+  private async handleSdtRunCommand(args: string[], sessionID?: string, providerID?: string, modelID?: string, messageID?: string): Promise<void> {
     const serverConfig = this.connectionService.getServerConfig()
     if (!serverConfig) {
       this.postMessage({ type: "testflow.error", sessionID: sessionID ?? "", error: "Not connected to CLI backend" })
@@ -2930,6 +2938,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       },
       sessionID: resolved.sid,
       userText: `/sdt-run ${args.join(" ")}`.trim(),
+      userMessageID: messageID,
       post: (msg) => this.postMessage(msg),
     })
   }
@@ -3332,6 +3341,19 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       .then(open, (err) => console.error("[TestAgent]  Failed to preview image:", err))
   }
 
+  // testagent_change start
+  private async handleExportConversation(markdown: string, title: string): Promise<void> {
+    const uri = await vscode.window.showSaveDialog({
+      filters: { Markdown: ["md"] },
+      defaultUri: vscode.Uri.file(`${title.replace(/[/\\?%*:|"<>]/g, "-")}.md`),
+    })
+    if (uri) {
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(markdown, "utf-8"))
+      void vscode.window.showInformationMessage(`对话已导出到 ${uri.fsPath}`)
+    }
+  }
+  // testagent_change end
+
   /**
    * Handle openFile request from the webview — open a file in the VS Code editor.
    * Resolves relative paths against the current session's directory (which may be
@@ -3354,6 +3376,103 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       },
       (err) => console.error("[TestAgent]  Failed to open file:", uri.fsPath, err),
     )
+  }
+
+  /**
+   * Handle openConfigFile request from the webview — open or create testagent config file.
+   * For local scope: checks workspace folder, creates .testagent/testagent.jsonc if needed.
+   * For global scope: opens global config file directly.
+   */
+  private async handleOpenConfigFile(scope: "local" | "global"): Promise<void> {
+    const path = await import("path")
+    const fs = await import("fs/promises")
+    const os = await import("os")
+
+    if (scope === "local") {
+      // Check if workspace folder is open
+      const workspaceFolders = vscode.workspace.workspaceFolders
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showWarningMessage("打开工作区文件夹以编辑项目testagent 配置文件")
+        return
+      }
+
+      // Use the first workspace folder
+      const workspaceRoot = workspaceFolders[0]!.uri.fsPath
+      const configDir = path.join(workspaceRoot, ".testagent")
+      const configFile = path.join(configDir, "testagent.jsonc")
+
+      try {
+        // Check if config file exists
+        await fs.access(configFile)
+        // File exists, open it
+        const doc = await vscode.workspace.openTextDocument(configFile)
+        await vscode.window.showTextDocument(doc)
+      } catch {
+        // File doesn't exist, create it
+        try {
+          await fs.mkdir(configDir, { recursive: true })
+          const defaultConfig = `{
+  // TestAgent 项目配置
+  // 更多配置选项请参考: https://tscode-gateway.paasuat.cmbchina.cn/help/testagent
+  "$schema": "https://opencode.ai/config.json"
+}
+`
+          await fs.writeFile(configFile, defaultConfig, "utf-8")
+          const doc = await vscode.workspace.openTextDocument(configFile)
+          await vscode.window.showTextDocument(doc)
+        } catch (err) {
+          console.error("[TestAgent] Failed to create config file:", err)
+          vscode.window.showErrorMessage(`创建配置文件失败: ${err}`)
+        }
+      }
+    } else {
+      // Global scope - open global config file
+      const xdg = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config")
+      const configDir = path.join(xdg, "testagent")
+      const candidates = ["testagent.jsonc", "testagent.json", "opencode.jsonc", "opencode.json", "config.json"]
+
+      let configFile: string | null = null
+
+      // Check for existing config files
+      for (const candidate of candidates) {
+        const filePath = path.join(configDir, candidate)
+        try {
+          await fs.access(filePath)
+          configFile = filePath
+          break
+        } catch {
+          // File doesn't exist, continue
+        }
+      }
+
+      // If no config file exists, create testagent.jsonc
+      if (!configFile) {
+        configFile = path.join(configDir, "testagent.jsonc")
+        try {
+          await fs.mkdir(configDir, { recursive: true })
+          const defaultConfig = `{
+  // TestAgent 全局配置
+  // 更多配置选项请参考: https://tscode-gateway.paasuat.cmbchina.cn/help/testagent
+  "$schema": "https://opencode.ai/config.json"
+}
+`
+          await fs.writeFile(configFile, defaultConfig, "utf-8")
+        } catch (err) {
+          console.error("[TestAgent] Failed to create global config file:", err)
+          vscode.window.showErrorMessage(`创建全局配置文件失败: ${err}`)
+          return
+        }
+      }
+
+      // Open the config file
+      try {
+        const doc = await vscode.workspace.openTextDocument(configFile)
+        await vscode.window.showTextDocument(doc)
+      } catch (err) {
+        console.error("[TestAgent] Failed to open global config file:", err)
+        vscode.window.showErrorMessage(`打开全局配置文件失败: ${err}`)
+      }
+    }
   }
 
   /**
@@ -3417,7 +3536,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     const notifications = vscode.workspace.getConfiguration("testagent.new.notifications")
     const notifyAgent = notifications.get<boolean>("agent", true)
     console.log("[TestAgent] 📋 Notification setting:", notifyAgent)
-    
+
     if (!notifyAgent) {
       console.log("[TestAgent] ❌ Notification disabled in settings")
       return
@@ -3425,27 +3544,30 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
 
     console.log("[TestAgent] ✅ Step 4: Notification is enabled")
     console.log("[TestAgent] 🎉 All checks passed! Showing notification...")
-    
+
     // Get task name from current session
     let taskName = "任务"
-    
+
     // Try to get from currentSession first
     if (this.currentSession?.id === sessionID && this.currentSession.title) {
       taskName = this.currentSession.title
       console.log("[TestAgent] 📋 Task name from currentSession:", taskName)
     } else if (this.client) {
       // If not available, try to fetch it asynchronously (don't wait)
-      this.client.session.get({ sessionID }).then(r => {
-        if (r.data?.title) {
-          console.log("[TestAgent] 📋 Task name from API:", r.data.title)
-        }
-      }).catch(() => {})
+      this.client.session
+        .get({ sessionID })
+        .then((r) => {
+          if (r.data?.title) {
+            console.log("[TestAgent] 📋 Task name from API:", r.data.title)
+          }
+        })
+        .catch(() => {})
     }
-    
+
     // Show system notification with task name
     this.systemNotification.notify({
       title: "TestAgent",
-      message: `${taskName}已完成`,
+      message: `${taskName}`,
       type: "info",
       onClick: () => this.revealWebview(),
     })

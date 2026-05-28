@@ -236,6 +236,34 @@ export class TestflowMessageBridge {
     this.agentPartID = ""
   }
 
+  onProgress(
+    taskName: string,
+    stages: any[],
+    completedCount: number,
+    totalCount: number,
+    percent: number,
+    nextHint: string,
+    exceptionHint: string | null,
+  ): void {
+    const partID = uid()
+    this.post?.({
+      type: "partUpdated",
+      sessionID: this.sessionID,
+      messageID: this.asstMsgID,
+      part: {
+        type: "tool",
+        id: partID,
+        messageID: this.asstMsgID,
+        tool: "testflow-progress",
+        state: {
+          status: "completed",
+          input: { taskName, stages, completedCount, totalCount, percent, nextHint, exceptionHint },
+          title: `任务清单 [${taskName}]`,
+        },
+      },
+    })
+  }
+
   onResponsePart(sessionID: string, messageID: string, sequence: number, part: any): void {
     // Check if this is a task tool part - trigger child session sync if so
     if (part.type === 'tool' && part.tool === 'task') {
