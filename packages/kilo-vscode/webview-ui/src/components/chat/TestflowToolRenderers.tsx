@@ -130,6 +130,84 @@ const TestflowAgentTool: Component<ToolProps> = (props) => {
 }
 
 // ---------------------------------------------------------------------------
+// testflow-progress
+// ---------------------------------------------------------------------------
+
+const TestflowProgressTool: Component<ToolProps> = (props) => {
+  const input = () => props.input as {
+    taskName: string
+    stages: {
+      stage_id: string
+      stage_name: string
+      status: string
+      execute_end_time: string | null
+      status_icon: string
+      status_text: string
+    }[]
+    completedCount: number
+    totalCount: number
+    percent: number
+    nextHint: string
+  }
+
+  const statusIcon = (status: string) => {
+    switch (status) {
+      case "completed": return "✓"
+      case "executing":
+      case "awaiting_access": return "›"
+      case "skipped": return "⏭"
+      case "exception": return "✗"
+      default: return "○"
+    }
+  }
+
+  const statusText = (status: string) => {
+    switch (status) {
+      case "completed": return "完成"
+      case "executing":
+      case "awaiting_access": return "进行中"
+      case "skipped": return "跳过"
+      case "exception": return "异常"
+      default: return "待开始"
+    }
+  }
+
+  return (
+    <div class="testflow-progress">
+      <div class="testflow-progress-title">任务清单 [{input().taskName}]</div>
+      <div class="testflow-progress-separator">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
+      <For each={input().stages}>
+        {(stage) => (
+          <div class="testflow-progress-stage">
+            <span class="testflow-progress-icon">{statusIcon(stage.status)}</span>
+            <span class="testflow-progress-id">{stage.stage_id}</span>
+            <span class="testflow-progress-name">{stage.stage_name}</span>
+            <span class="testflow-progress-status">{statusText(stage.status)}</span>
+            <Show when={stage.execute_end_time}>
+              <span class="testflow-progress-time">
+                {new Date(stage.execute_end_time!).toLocaleString("zh-CN", {
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            </Show>
+          </div>
+        )}
+      </For>
+      <div class="testflow-progress-separator">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
+      <div class="testflow-progress-footer">
+        进度: {input().completedCount}/{input().totalCount} ({input().percent}%)
+        <Show when={input().nextHint}>
+          <span class="testflow-progress-hint">  |  {input().nextHint}</span>
+        </Show>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 
@@ -142,4 +220,5 @@ export function registerTestflowToolRenderers() {
   ToolRegistry.register({ name: "testflow-step", render: TestflowStepTool })
   ToolRegistry.register({ name: "testflow-question", render: TestflowQuestionTool })
   ToolRegistry.register({ name: "testflow-agent", render: TestflowAgentTool })
+  ToolRegistry.register({ name: "testflow-progress", render: TestflowProgressTool })
 }

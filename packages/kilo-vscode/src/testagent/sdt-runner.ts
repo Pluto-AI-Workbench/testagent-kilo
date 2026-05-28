@@ -138,6 +138,17 @@ export class SdtRunner {
       case "agent_done":
         this.bridge.onAgentDone()
         break
+      case "progress":
+        this.bridge.onProgress(
+          event.task_name as string,
+          event.stages as any[],
+          event.completed_count as number,
+          event.total_count as number,
+          event.percent as number,
+          event.next_hint as string,
+          event.exception_hint as string | null,
+        )
+        break
       case "text":
         this.bridge.onText(event.text as string)
         break
