@@ -172,6 +172,9 @@ export class SdtRunner {
           event.part as any,
         )
         break
+      case "new_assistant":
+        this.bridge.onNewAssistant()
+        break
       default:
         this.bridge.onText(JSON.stringify(event))
     }

@@ -264,6 +264,42 @@ export class TestflowMessageBridge {
     })
   }
 
+  onNewAssistant(): void {
+    const now = Date.now()
+    // Close the current assistant message
+    this.post?.({
+      type: "messageCreated",
+      message: {
+        id: this.asstMsgID,
+        sessionID: this.sessionID,
+        role: "assistant",
+        parentID: this.userMsgID,
+        createdAt: new Date(now).toISOString(),
+        time: { created: now, completed: now },
+        finish: "stop",
+      },
+    })
+
+    // Create a new assistant message shell
+    this.asstMsgID = uid()
+    this.logPartID = ""
+    this.logText = ""
+    this.steps.clear()
+    this.stepIndex = 0
+
+    this.post?.({
+      type: "messageCreated",
+      message: {
+        id: this.asstMsgID,
+        sessionID: this.sessionID,
+        role: "assistant",
+        parentID: this.userMsgID,
+        createdAt: new Date(now + 1).toISOString(),
+        time: { created: now + 1 },
+      },
+    })
+  }
+
   onResponsePart(sessionID: string, messageID: string, sequence: number, part: any): void {
     // Check if this is a task tool part - trigger child session sync if so
     if (part.type === 'tool' && part.tool === 'task') {
