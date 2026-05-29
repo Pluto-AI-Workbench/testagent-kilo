@@ -409,6 +409,13 @@ jobs:
 
           ls -lh dist/*.tar.gz dist/*.zip || true
 
+      # Ensure release is published before uploading assets
+      - name: Ensure release is published
+        run: |
+          gh release edit v${{ needs.version.outputs.version }} --draft=false --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       # 上传 CLI 到 GitHub Release
       - name: Upload CLI archives to GitHub Release
         run: |
