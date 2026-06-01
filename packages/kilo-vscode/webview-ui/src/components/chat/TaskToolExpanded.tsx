@@ -114,7 +114,8 @@ const TaskToolRenderer: Component<ToolProps> = (props) => {
           </span>
         </Show>
       </div>
-      <Show when={childSessionId() && (running() || busy())}>
+      {/* testagent_change start - sub-agent stop functionality */}
+      {/* <Show when={childSessionId() && (running() || busy())}>
         <Tooltip value={language.t("prompt.action.stop")} placement="top">
           <IconButton
             icon="stop"
@@ -124,7 +125,7 @@ const TaskToolRenderer: Component<ToolProps> = (props) => {
             onClick={stop}
           />
         </Tooltip>
-      </Show>
+      </Show> */}
       <Show when={childSessionId()}>
         <IconButton
           icon="square-arrow-top-right"

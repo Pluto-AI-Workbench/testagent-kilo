@@ -225,8 +225,8 @@ export const TaskHeader: Component<TaskHeaderProps> = (props) => {
               />
             </Tooltip>
           </Show>
-          {/* testagent_change end */}
-          <Show when={props.readonly && busy()}>
+          {/* testagent_change end 暂时注释子agent 停止功能 */}
+          {/* <Show when={props.readonly && busy()}>
             <Tooltip value={language.t("prompt.action.stop")} placement="bottom">
               <IconButton
                 icon="stop"
@@ -236,7 +236,7 @@ export const TaskHeader: Component<TaskHeaderProps> = (props) => {
                 aria-label={language.t("prompt.action.stop")}
               />
             </Tooltip>
-          </Show>
+          </Show> */}
           <Show when={!props.readonly}>
             <Tooltip value={language.t("command.session.compact")} placement="bottom">
               <IconButton
