@@ -20,6 +20,7 @@ import { useVSCode } from "../../context/vscode"
 import { TaskTimeline } from "./TaskTimeline"
 import { ContextProgress } from "./ContextProgress"
 import type { TodoItem, ExtensionMessage } from "../../types/messages"
+import { Identifier } from "../../utils/id"
 
 interface TaskHeaderProps {
   readonly?: boolean
@@ -28,6 +29,7 @@ interface TaskHeaderProps {
 export const TaskHeader: Component<TaskHeaderProps> = (props) => {
   const session = useSession()
   const language = useLanguage()
+  const addOptimistic = session.addOptimistic
 
   const title = createMemo(() => session.currentSession()?.title ?? language.t("command.session.new"))
   const hasMessages = createMemo(() => session.messages().length > 0)
@@ -242,7 +244,16 @@ export const TaskHeader: Component<TaskHeaderProps> = (props) => {
                 size="small"
                 variant="ghost"
                 disabled={!canCompact()}
-                onClick={() => session.compact()}
+                onClick={() => {
+                  // 创建乐观的"压缩会话"消息让UI立即显示
+                  const messageID = Identifier.ascending("message")
+                  const sessionID = session.currentSession()?.id
+                  if (sessionID) {
+                    addOptimistic(sessionID, messageID, "压缩会话", [])
+                  }
+                  // 然后正常发送compact请求
+                  session.compact()
+                }}
                 aria-label={language.t("command.session.compact")}
               />
             </Tooltip>
