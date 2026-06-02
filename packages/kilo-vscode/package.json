@@ -311,6 +311,11 @@
         "command": "testagent.new.generateTerminalCommand",
         "title": "Generate Terminal Command",
         "category": "TestAgent"
+      },
+      {
+        "command": "testagent.appendToPromptInput",
+        "title": "Append Content to Prompt Input",
+        "category": "TestAgent"
       }
     ],
     "submenus": [

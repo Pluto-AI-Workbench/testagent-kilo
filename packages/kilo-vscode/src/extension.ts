@@ -267,10 +267,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("testagent.new.reloadMcp", async () => {
       try {
         console.log("[TestAgent] Reload MCP command triggered")
-        await Promise.all([
-          provider.reloadMcp(),
-          settingsEditorProvider.reloadMcp(),
-        ])
+        await Promise.all([provider.reloadMcp(), settingsEditorProvider.reloadMcp()])
         return { success: true }
       } catch (error) {
         console.error("[TestAgent] Failed to reload MCP:", error)
@@ -514,6 +511,21 @@ export function activate(context: vscode.ExtensionContext) {
   // Register code actions (editor context menus, terminal context menus, keyboard shortcuts)
   registerCodeActions(context, provider, agentManagerProvider)
   registerTerminalActions(context, provider, agentManagerProvider)
+
+  // Register public API for external plugins to append content to prompt input
+  context.subscriptions.push(
+    vscode.commands.registerCommand("testagent.appendToPromptInput", async (content: string) => {
+      if (!content || typeof content !== "string") {
+        vscode.window.showErrorMessage("Invalid content: expected a string")
+        return
+      }
+      const target = agentManagerProvider?.isActive() ? agentManagerProvider : provider
+      target.postMessage({
+        type: "appendChatBoxMessage",
+        text: content,
+      })
+    }),
+  )
 
   // Register CodeActionProvider (lightbulb quick fixes)
   context.subscriptions.push(

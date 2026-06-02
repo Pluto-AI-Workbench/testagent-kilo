@@ -18,6 +18,10 @@ export class KiloCodeActionProvider implements vscode.CodeActionProvider {
     add.command = { command: "testagent.new.addToContext", title: "Add to TestAgent" }
     actions.push(add)
 
+    const custom = new vscode.CodeAction("Add Custom Content to TestAgent", vscode.CodeActionKind.RefactorRewrite)
+    custom.command = { command: "testagent.new.customAddToContext", title: "Add Custom Content to TestAgent" }
+    actions.push(custom)
+
     const hasDiagnostics = context.diagnostics.length > 0
 
     if (hasDiagnostics) {

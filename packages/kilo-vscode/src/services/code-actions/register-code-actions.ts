@@ -67,5 +67,19 @@ export function registerCodeActions(
     vscode.commands.registerCommand("testagent.new.focusChatInput", () => {
       target().postMessage({ type: "action", action: "focusInput" })
     }),
+
+    vscode.commands.registerCommand("testagent.new.customAddToContext", async () => {
+      const userInput = await vscode.window.showInputBox({
+        prompt: "输入要添加到 TestAgent 的内容",
+        placeHolder: "输入你想讨论的内容...",
+      })
+
+      if (!userInput) return
+
+      target().postMessage({
+        type: "appendChatBoxMessage",
+        text: userInput,
+      })
+    }),
   )
 }
