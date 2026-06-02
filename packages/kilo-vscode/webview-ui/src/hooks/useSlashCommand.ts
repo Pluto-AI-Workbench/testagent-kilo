@@ -164,11 +164,6 @@ export function useSlashCommand(vscode: VSCodeContext, exclude?: Set<string>): S
       hints: ["testflow", "new task"],
     },
     {
-      name: "sdt-test",
-      description: "testflow测试",
-      hints: ["testflow", "test"],
-    },
-    {
       name: "sdt-run",
       description: "执行指定任务的某个阶段",
       hints: ["testflow", "run", "stage"],
