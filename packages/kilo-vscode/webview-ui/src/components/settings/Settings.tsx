@@ -17,7 +17,8 @@ import DisplayTab from "./DisplayTab"
 import AutocompleteTab from "./AutocompleteTab"
 import NotificationsTab from "./NotificationsTab"
 import ContextTab from "./ContextTab"
-import NormalSettingTab from './NormalSettingTab'
+import NormalSettingTab from "./NormalSettingTab"
+import MemorySettingTab from "./MemorySettings"
 
 export interface SettingsProps {
   tab?: string
@@ -69,6 +70,7 @@ const Settings: Component<SettingsProps> = (props) => {
     vscode.postMessage({ type: "settingsTabChanged", tab })
   }
 
+  // 打开个性化配置文件
   const open = (scope: "local" | "global") => {
     vscode.postMessage({ type: "openConfigFile", scope })
   }
@@ -86,7 +88,9 @@ const Settings: Component<SettingsProps> = (props) => {
           gap: "8px",
         }}
       >
-        <h2 style={{ "font-size": "16px", "font-weight": "600", margin: 0,flex:1 }}>{language.t("sidebar.settings")}</h2>
+        <h2 style={{ "font-size": "16px", "font-weight": "600", margin: 0, flex: 1 }}>
+          {language.t("sidebar.settings")}
+        </h2>
         <Button variant="secondary" size="small" icon="edit" onClick={() => open("local")}>
           项目配置
         </Button>
@@ -143,6 +147,10 @@ const Settings: Component<SettingsProps> = (props) => {
           <Tabs.Trigger value="context">
             <Icon name="server" />
             <span class="label">{language.t("settings.context.title")}</span>
+          </Tabs.Trigger>
+          <Tabs.Trigger value="memorySettings">
+            <Icon name="brain" />
+            <span class="label">记忆设置</span>
           </Tabs.Trigger>
           <Tabs.Trigger value="normalSetting">
             <Icon name="settings-gear" />
@@ -203,7 +211,11 @@ const Settings: Component<SettingsProps> = (props) => {
           <h3>{language.t("settings.context.title")}</h3>
           <ContextTab />
         </Tabs.Content>
-         <Tabs.Content value="normalSetting">
+        <Tabs.Content value="memorySettings">
+          <h3>记忆设置</h3>
+          <MemorySettingTab />
+        </Tabs.Content>
+        <Tabs.Content value="normalSetting">
           <h3>通用设置</h3>
           <NormalSettingTab />
         </Tabs.Content>

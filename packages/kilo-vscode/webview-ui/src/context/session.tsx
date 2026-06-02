@@ -206,6 +206,7 @@ interface SessionContextValue {
   // Actions
   revertSession: (messageID: string) => void
   unrevertSession: () => void
+  addOptimistic: (sid: string, messageID: string, text: string, files?: FileAttachment[]) => void
   sendMessage: (text: string, providerID?: string, modelID?: string, files?: FileAttachment[], draftID?: string) => void
   sendCommand: (
     command: string,
@@ -2189,6 +2190,7 @@ export const SessionProvider: ParentComponent = (props) => {
   })
 
   const value: SessionContextValue = {
+    addOptimistic,
     currentSessionID,
     currentSession,
     setCurrentSessionID,
