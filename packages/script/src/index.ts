@@ -65,6 +65,12 @@ async function fetchLocalVersion() {
   const vscodePkg = await Bun.file(vscodePkgPath).json()
   return vscodePkg.version as string
 }
+
+type Release = {
+  tagName: string
+  isDraft: boolean
+  isPrerelease: boolean
+}
 // testagent_change end
 
 async function fetchLatest() {
@@ -76,22 +82,21 @@ async function fetchLatest() {
 }
 
 async function fetchHighest() {
-  // testagent_change - always use local version from kilo-vscode/package.json
+  // testagent_change start - use the current repository's GitHub releases, then fallback locally
+  if (!process.env.GH_REPO) return fetchLocalVersion()
+  const data = await $`gh release list --json tagName,isDraft,isPrerelease --limit 100 --repo ${process.env.GH_REPO}`
+    .json()
+    .catch(() => [] as Release[])
+  const versions = data.flatMap((item: Release) => {
+    if (item.isDraft || item.isPrerelease) return []
+    const version = parseVersion(item.tagName)
+    if (!version) return []
+    return [version]
+  })
+  const highest = versions.sort(compareVersion).at(-1)
+  if (highest) return highest.value
   return fetchLocalVersion()
-  
-  // kilocode_change - original logic (disabled)
-  // if (!process.env.GH_REPO) return fetchLatest()
-  // const data: { tagName: string }[] = await $`gh release list --json tagName --limit 100 --repo ${process.env.GH_REPO}`
-  //   .json()
-  //   .catch(() => [])
-  // const versions = data.flatMap((item) => {
-  //   const version = parseVersion(item.tagName)
-  //   if (!version) return []
-  //   return [version]
-  // })
-  // const highest = versions.sort(compareVersion).at(-1)
-  // if (highest) return highest.value
-  // return fetchLatest()
+  // testagent_change end
 }
 
 function bumpVersion(current: string, type: string) {
@@ -114,8 +119,10 @@ const VERSION = await (async () => {
     // kilocode_change end
     return `0.0.0-${CHANNEL}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}`
   }
-  // testagent_change - directly use version from kilo-vscode/package.json, no auto-bump
-  return await fetchHighest()
+  // testagent_change - auto-bump from the highest GitHub release, fallback to local version
+  const current = await fetchHighest()
+  if (env.KILO_BUMP) return bumpVersion(current, env.KILO_BUMP.toLowerCase())
+  return bumpVersion(current, "patch")
 })()
 
 // kilocode_change start
