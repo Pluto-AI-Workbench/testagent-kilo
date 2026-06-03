@@ -1,4 +1,4 @@
-import { Component, Show, For, createMemo, createSignal } from "solid-js"
+import { Component, Show, For, createEffect, createMemo, createSignal } from "solid-js"
 import { TextField } from "@kilocode/kilo-ui/text-field"
 import { Select } from "@kilocode/kilo-ui/select"
 import { Switch } from "@kilocode/kilo-ui/switch"
@@ -33,8 +33,21 @@ const ModeEditView: Component<Props> = (props) => {
   const agent = () => session.allAgents().find((a) => a.name === props.name)
   const native = () => agent()?.native ?? false
   const [expanded, setExpanded] = createSignal(false)
+  const [focus, setFocus] = createSignal<"temp" | "top">()
+  const [temp, setTemp] = createSignal("")
+  const [top, setTop] = createSignal("")
 
   const cfg = createMemo<AgentConfig>(() => config().agent?.[props.name] ?? {})
+
+  createEffect(() => {
+    if (focus() === "temp") return
+    setTemp(cfg().temperature?.toString() ?? "")
+  })
+
+  createEffect(() => {
+    if (focus() === "top") return
+    setTop(cfg().top_p?.toString() ?? "")
+  })
 
   const update = (partial: Partial<AgentConfig>) => {
     const existing = config().agent ?? {}
@@ -178,11 +191,14 @@ const ModeEditView: Component<Props> = (props) => {
           description={language.t("settings.agentBehaviour.temperature.description")}
         >
           <TextField
-            value={cfg().temperature?.toString() ?? ""}
+            value={temp()}
             placeholder={language.t("common.default")}
+            onFocus={() => setFocus("temp")}
+            onBlur={() => setFocus(undefined)}
             onChange={(val) => {
-              const parsed = parseFloat(val)
-              update({ temperature: isNaN(parsed) ? undefined : parsed })
+              setTemp(val)
+              const parsed = Number(val)
+              update({ temperature: val.trim() === "" || Number.isNaN(parsed) ? undefined : parsed })
             }}
           />
         </SettingsRow>
@@ -192,11 +208,14 @@ const ModeEditView: Component<Props> = (props) => {
           description={language.t("settings.agentBehaviour.topP.description")}
         >
           <TextField
-            value={cfg().top_p?.toString() ?? ""}
+            value={top()}
             placeholder={language.t("common.default")}
+            onFocus={() => setFocus("top")}
+            onBlur={() => setFocus(undefined)}
             onChange={(val) => {
-              const parsed = parseFloat(val)
-              update({ top_p: isNaN(parsed) ? undefined : parsed })
+              setTop(val)
+              const parsed = Number(val)
+              update({ top_p: val.trim() === "" || Number.isNaN(parsed) ? undefined : parsed })
             }}
           />
         </SettingsRow>
