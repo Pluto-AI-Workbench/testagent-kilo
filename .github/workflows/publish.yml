@@ -46,14 +46,27 @@ jobs:
         with:
           ref: ${{ inputs.branch || github.ref }}
           fetch-depth: 0
-          token: ${{ secrets.TESTFLOW_GITHUB_TOKEN || github.token }}
-          submodules: recursive
+          submodules: false
 
       # testagent_change - use latest testagent-core commit for release builds
       - name: Update testagent-core submodule
         run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
           git submodule sync --recursive packages/testagent-core
           git submodule update --init --remote --recursive packages/testagent-core
+
+      # testagent_change - root workspace install needs the testflow workspace
+      - name: Update testflow submodule
+        env:
+          TESTFLOW_GITHUB_TOKEN: ${{ secrets.TESTFLOW_GITHUB_TOKEN }}
+        run: |
+          if [ -z "$TESTFLOW_GITHUB_TOKEN" ]; then
+            echo "::error::TESTFLOW_GITHUB_TOKEN is required to clone private submodule Pluto-AI-Workbench/testflow"
+            exit 1
+          fi
+          git config --global url."https://x-access-token:${TESTFLOW_GITHUB_TOKEN}@github.com/Pluto-AI-Workbench/".insteadOf "https://github.com/Pluto-AI-Workbench/"
+          git submodule sync --recursive packages/testflow
+          git submodule update --init --remote --recursive packages/testflow
 
       - uses: ./.github/actions/setup-bun
 
@@ -136,13 +149,13 @@ jobs:
           ref: ${{ inputs.branch || github.ref }}
           fetch-depth: 0
           fetch-tags: true
-          token: ${{ secrets.TESTFLOW_GITHUB_TOKEN || github.token }}
-          submodules: recursive
+          submodules: false
 
       # testagent_change - use latest testagent-core commit for release builds
       - name: Update testagent-core submodule
         if: steps.should_build.outputs.build == 'true'
         run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
           git submodule sync --recursive packages/testagent-core
           git submodule update --init --remote --recursive packages/testagent-core
 
@@ -246,20 +259,27 @@ jobs:
         if: steps.should_build.outputs.build == 'true'
         with:
           ref: ${{ inputs.branch || github.ref }}
-          token: ${{ secrets.TESTFLOW_GITHUB_TOKEN || github.token }}
-          submodules: recursive # testagent_change - checkout submodules (testagent-core)
+          submodules: false # testagent_change - submodules are updated explicitly below
 
       # testagent_change - use latest testagent-core commit for release builds
       - name: Update testagent-core submodule
         if: steps.should_build.outputs.build == 'true'
         run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
           git submodule sync --recursive packages/testagent-core
           git submodule update --init --remote --recursive packages/testagent-core
 
       # testagent_change - use latest testflow commit for VSIX builds
       - name: Update testflow submodule
         if: steps.should_build.outputs.build == 'true'
+        env:
+          TESTFLOW_GITHUB_TOKEN: ${{ secrets.TESTFLOW_GITHUB_TOKEN }}
         run: |
+          if [ -z "$TESTFLOW_GITHUB_TOKEN" ]; then
+            echo "::error::TESTFLOW_GITHUB_TOKEN is required to clone private submodule Pluto-AI-Workbench/testflow"
+            exit 1
+          fi
+          git config --global url."https://x-access-token:${TESTFLOW_GITHUB_TOKEN}@github.com/Pluto-AI-Workbench/".insteadOf "https://github.com/Pluto-AI-Workbench/"
           git submodule sync --recursive packages/testflow
           git submodule update --init --remote --recursive packages/testflow
 
@@ -390,8 +410,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          token: ${{ secrets.TESTFLOW_GITHUB_TOKEN || github.token }}
-          submodules: recursive
+          submodules: false
 
       # testagent_change - use GITHUB_TOKEN instead of app token for simplicity
       # - name: Setup Git Committer
