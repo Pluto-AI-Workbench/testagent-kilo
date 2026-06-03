@@ -316,6 +316,11 @@
         "command": "testagent.appendToPromptInput",
         "title": "Append Content to Prompt Input",
         "category": "TestAgent"
+      },
+      {
+        "command": "testagent.clearPromptInput",
+        "title": "Clear Prompt Input",
+        "category": "TestAgent"
       }
     ],
     "submenus": [
