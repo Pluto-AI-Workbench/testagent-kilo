@@ -47,6 +47,28 @@ export const ChatView: Component<ChatViewProps> = (props) => {
   const hasMessages = () => session.messages().length > 0
   const idle = () => session.status() !== "busy"
 
+  // testagent_change start - 判断最后一条 assistant 消息是否处于可继续状态（出错或被中断）
+  const lastAssistantMsg = () => {
+    const msgs = session.messages()
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === "assistant") return msgs[i]
+    }
+    return undefined
+  }
+  const canContinue = () => {
+    // 重试中不显示继续按钮
+    if (session.status() !== "idle") return false
+    const msg = lastAssistantMsg()
+    if (!msg) return false
+    // 有 error 字段 → 出错
+    if (msg.error) return true
+    // 有 finish 且不是中间状态 → 正常完成，不需要继续
+    if (msg.finish && !["tool-calls", "unknown"].includes(msg.finish)) return false
+    // 没有有效 finish → 被中断（含窗口关闭强制退出）
+    return true
+  }
+  // testagent_change end
+
   // "Continue in Worktree" state
   const [transferring, setTransferring] = createSignal(false)
   const [transferDetail, setTransferDetail] = createSignal("")
@@ -162,19 +184,21 @@ export const ChatView: Component<ChatViewProps> = (props) => {
           <Show when={!props.readonly && hasMessages() && idle() && !blocked()}>
             <div class="new-task-button-wrapper">
               <div class="session-actions-row">
-                {/* testagent_change start - 添加Continue按钮 */}
-                <Tooltip value="Continue with the current task" placement="top">
-                  <Button
-                    variant="primary"
-                    size="small"
-                    onClick={() => {
-                      session.continueTask()
-                    }}
-                    aria-label={language.t("command.session.continue")}
-                  >
-                    {language.t("command.session.continue")}
-                  </Button>
-                </Tooltip>
+                {/* testagent_change start - 继续按钮：仅在出错或中断时显示 */}
+                <Show when={canContinue()}>
+                  <Tooltip value="继续当前任务" placement="top">
+                    <Button
+                      variant="secondary"
+                      size="small"
+                      onClick={() => {
+                        session.continueTask()
+                      }}
+                      aria-label={language.t("command.session.continue")}
+                    >
+                      {language.t("command.session.continue")}
+                    </Button>
+                  </Tooltip>
+                </Show>
                 {/* testagent_change end */}
                 
                 <Tooltip value="Start a new conversation" placement="top">
