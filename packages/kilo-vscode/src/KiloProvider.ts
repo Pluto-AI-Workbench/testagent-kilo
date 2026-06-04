@@ -778,7 +778,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
         }
         // testagent_change start - 添加继续任务处理
         case "continueTask":
-          await this.handleContinueTask(message.sessionID, message.messageID)
+          await this.handleContinueTask(message.sessionID, message.messageID, message.providerID, message.modelID)
           break
         // testagent_change end
         case "abort":
@@ -3219,8 +3219,8 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
   }
 
   // testagent_change start - 修改继续任务方法调用 resume API
-  private async handleContinueTask(sessionID?: string, messageID?: string): Promise<void> {
-    console.log("[TestAgent] 🔄 handleContinueTask called:", { sessionID, messageID })
+  private async handleContinueTask(sessionID?: string, messageID?: string, providerID?: string, modelID?: string): Promise<void> {
+    console.log("[TestAgent] 🔄 handleContinueTask called:", { sessionID, messageID, providerID, modelID })
 
     if (!this.client) {
       console.error("[TestAgent] ❌ Cannot continue task: not connected to CLI backend")
@@ -3240,12 +3240,10 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     try {
       const dir = this.getWorkspaceDirectory(sessionID)
       
-      // Track the message ID (important for confirmation handling)
       this.connectionService.recordMessageSessionId(messageID, sessionID)
 
-      console.log("[TestAgent] 📤 Calling resume API:", { sessionID, messageID, dir })
+      console.log("[TestAgent] 📤 Calling resume API:", { sessionID, messageID, dir, providerID, modelID })
 
-      // Use SDK's resume method to continue generating from existing assistant message
       await runWithMessageConfirmation(this.confirmations, messageID, "Resume task request", () =>
         this.withRetry(
           () =>
@@ -3253,6 +3251,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
               sessionID,
               messageID,
               directory: dir,
+              ...(providerID && modelID ? { model: { providerID, modelID } } : {}),
             }),
           sessionID,
           messageID,

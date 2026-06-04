@@ -1947,7 +1947,9 @@ export interface SendCommandRequest {
 export interface ContinueTaskRequest {
   type: "continueTask"
   sessionID: string
-  messageID?: string // testagent_change - 添加 messageID 用于追踪
+  messageID?: string
+  providerID?: string
+  modelID?: string
 }
 // testagent_change end
 

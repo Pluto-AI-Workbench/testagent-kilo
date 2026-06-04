@@ -6236,6 +6236,10 @@ export type SessionUnrevertResponse = SessionUnrevertResponses[keyof SessionUnre
 export type SessionResumeData = {
   body?: {
     messageID: string
+    model?: {
+      providerID: string
+      modelID: string
+    }
   }
   path: {
     sessionID: string

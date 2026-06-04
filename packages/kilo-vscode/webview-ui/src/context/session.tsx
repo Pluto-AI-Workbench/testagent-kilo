@@ -472,10 +472,10 @@ export const SessionProvider: ParentComponent = (props) => {
 
   function selectModel(providerID: string, modelID: string) {
     applyModel(selectedAgentName(), { providerID, modelID })
-    const sid = currentSessionID()
-    if (sid) {
-      setStore("messages", sid, (msgs = []) => msgs.filter((m) => !m.error))
-    }
+    // const sid = currentSessionID()
+    // if (sid) {
+    //   setStore("messages", sid, (msgs = []) => msgs.filter((m) => !m.error))
+    // }
   }
 
   /** The config/default model for the current mode (what settings says). */
@@ -1815,22 +1815,21 @@ export const SessionProvider: ParentComponent = (props) => {
       return
     }
 
-    // testagent_change start - 找到最后一条 assistant 消息并重用其 messageID
-    // 从后往前查找最后一条 assistant 消息
     const lastAssistant = [...msgs].reverse().find((m) => m.role === "assistant")
-    
     if (!lastAssistant) {
       console.warn("[testagent] Cannot continue task: no assistant message found")
       return
     }
 
-    console.log("[testagent] Continuing task with existing messageID:", lastAssistant.id)
+    // 带上前端当前选中的模型，后端优先使用
+    const model = selected()
     vscode.postMessage({
       type: "continueTask",
       sessionID: sid,
-      messageID: lastAssistant.id, // 重用现有的 assistant message ID
+      messageID: lastAssistant.id,
+      providerID: model?.providerID,
+      modelID: model?.modelID,
     })
-    // testagent_change end
   }
   // testagent_change end
 
