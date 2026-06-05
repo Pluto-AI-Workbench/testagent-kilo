@@ -17,9 +17,6 @@
   "engines": {
     "vscode": "^1.105.1"
   },
-  "extensionDependencies": [
-    "test-tech.beeeyes"
-  ],
   "license": "MIT",
   "author": {
     "name": "TestAgent"
