@@ -158,6 +158,11 @@ export function useSlashCommand(vscode: VSCodeContext, exclude?: Set<string>): S
       action: openBeeEyes,
     },
     {
+      name: "task-query",
+      description: "查询执行任务详情",
+      hints: ["task", "query", "status", "查询"],
+    },
+    {
       name: "sdt-new",
       description: "启动测试流程 - 创建新任务",
       hints: ["testflow", "new task"],

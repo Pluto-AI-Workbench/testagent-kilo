@@ -66,6 +66,7 @@ import { hasGit } from "./kilo-provider/git-status"
 import { exec } from "./util/process"
 // testagent_change start - testflow integration
 import { SdtRunner } from "./testagent/sdt-runner"
+import { runTaskCommand } from "./testagent/task-runner"
 // testagent_change end
 // legacy-migration start
 import {
@@ -3030,6 +3031,33 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
       post: (msg) => this.postMessage(msg),
     })
   }
+
+  // testagent_change start - task command handler (task-start / task-query)
+  private async handleTaskCommand(text: string, sessionID?: string, messageID?: string): Promise<void> {
+    const parts = text.trim().split(/\s+/)
+    const raw = parts[0].slice(6) // strip "/task-"
+
+    if (raw !== "query") {
+      void vscode.window.showErrorMessage(`TestAgent: 未知 task 命令 "${raw}"`)
+      return
+    }
+
+    const resolved = await this.resolveSession(sessionID)
+    if (!resolved) {
+      void vscode.window.showErrorMessage("TestAgent: Not connected to CLI backend")
+      return
+    }
+
+    void runTaskCommand({
+      cmd: "query",
+      args: parts.slice(1),
+      cwd: resolved.dir,
+      sessionID: resolved.sid,
+      userText: text,
+      userMessageID: messageID,
+      post: (msg) => this.postMessage(msg),
+    })
+  }
   // testagent_change end
 
   private async handleSendMessage(
@@ -3046,6 +3074,12 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     // testagent_change start - intercept /sdt-* commands for testflow
     if (text.startsWith("/sdt-")) {
       await this.handleSdtCommand(text, sessionID, providerID, modelID, messageID)
+      return
+    }
+    // testagent_change end
+    // testagent_change start - intercept /task-* commands
+    if (text.startsWith("/task-")) {
+      await this.handleTaskCommand(text, sessionID, messageID)
       return
     }
     // testagent_change end
@@ -3130,6 +3164,12 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     // testagent_change start - intercept sdt-* commands for testflow
     if (command.startsWith("sdt-")) {
       await this.handleSdtCommand(`/${command} ${args}`.trim(), sessionID, providerID, modelID, messageID)
+      return
+    }
+    // testagent_change end
+    // testagent_change start - intercept task-* commands
+    if (command.startsWith("task-")) {
+      await this.handleTaskCommand(`/${command} ${args}`.trim(), sessionID, messageID)
       return
     }
     // testagent_change end
