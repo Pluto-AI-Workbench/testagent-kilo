@@ -33,8 +33,6 @@ export class SdtRunner {
     
     if (this.running) {
       console.log('[TestAgent] SdtRunner already running, aborting')
-      // Notify via bridge so the error appears inline in the chat
-      opts.post({ type: "testflow.error", sessionID: opts.sessionID, error: "Another testflow process is already running" })
       return
     }
 
@@ -89,18 +87,6 @@ export class SdtRunner {
     })
   }
 
-  reply(id: string, answers: string[]): void {
-    if (!this.proc?.stdin?.writable) return
-    this.proc.stdin.write(JSON.stringify({ type: "question_reply", id, answers }) + "\n")
-    this.bridge.onQuestionAnswered(id)
-  }
-
-  reject(id: string): void {
-    if (!this.proc?.stdin?.writable) return
-    this.proc.stdin.write(JSON.stringify({ type: "question_reject", id }) + "\n")
-    this.bridge.onQuestionAnswered(id)
-  }
-
   abort(): void {
     if (!this.proc) return
     try {
@@ -112,35 +98,9 @@ export class SdtRunner {
     this.cleanup()
   }
 
-  isRunning(): boolean {
-    return this.running
-  }
-
   private dispatch(event: JsonLine): void {
     const type = event.type as string
     switch (type) {
-      case "step":
-        this.bridge.onStep(
-          event.title as string,
-          event.status as "start" | "complete" | "exception",
-          event.stage_id as string | undefined,
-        )
-        break
-      case "question":
-        this.bridge.onQuestion(
-          event.id as string,
-          event.header as string,
-          event.question as string,
-          event.options as { label: string; description: string }[],
-          event.multiple as boolean | undefined,
-        )
-        break
-      case "agent_start":
-        this.bridge.onAgentStart(event.skill as string | undefined, event.prompt as string | undefined)
-        break
-      case "agent_done":
-        this.bridge.onAgentDone()
-        break
       case "progress":
         this.bridge.onProgress(
           event.task_name as string,
