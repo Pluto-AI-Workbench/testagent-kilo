@@ -787,15 +787,6 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
           await this.handleAbort(message.sessionID, parseQueued(message.queuedMessageIDs))
           break
         // testagent_change start - testflow message handlers
-        case "testflow.questionReply":
-          this.sdtRunner.reply(message.id, message.answers)
-          break
-        case "testflow.questionReject":
-          this.sdtRunner.reject(message.id)
-          break
-        case "testflow.abort":
-          this.sdtRunner.abort()
-          break
         case "testflow.syncChildSession":
           await this.syncChildSession(message.sessionID)
           break

@@ -7,13 +7,12 @@
  * AssistantMessage / ToolRegistry rendering path handles testflow output natively.
  *
  * Event -> webview message mapping:
- *   step        -> tool part  (tool: "testflow-step",     state: running -> completed/error)
- *   question    -> tool part  (tool: "testflow-question", state: pending while awaiting answer)
- *   agent_start -> tool part  (tool: "testflow-agent",    state: running)
- *   agent_done  -> tool part  (tool: "testflow-agent",    state: completed)
- *   text / log  -> text part  (appended to the assistant message)
- *   error       -> text part  (prefixed with "! ")
- *   done        -> closes the assistant message (sessionStatus idle)
+ *   progress       -> tool part  (tool: "testflow-progress", state: completed)
+ *   response_part  -> tool/text  (forwarded to AssistantMessage for native rendering)
+ *   new_assistant  -> closes current assistant message, opens a new one
+ *   text / log     -> text part  (appended to the assistant message)
+ *   error          -> text part  (prefixed with "! ")
+ *   done           -> closes the assistant message (sessionStatus idle)
  */
 
 import { randomUUID } from "crypto"
@@ -29,11 +28,6 @@ export interface BridgeOpts {
   post: (msg: unknown) => void
 }
 
-interface StepTracker {
-  partID: string
-  stageId?: string
-}
-
 export class TestflowMessageBridge {
   private sessionID = ""
   private userMsgID = ""
@@ -42,23 +36,9 @@ export class TestflowMessageBridge {
   private logText = ""
   private post: ((msg: unknown) => void) | null = null
 
-  /** Map from stage_id (or step index) -> part ID, for updating step state */
-  private steps = new Map<string, StepTracker>()
-  private stepIndex = 0
-
-  /** Part ID of the currently pending question */
-  private questionPartID = ""
-
-  /** Part ID of the currently running agent */
-  private agentPartID = ""
-
   start(opts: BridgeOpts): void {
     this.sessionID = opts.sessionID
     this.post = opts.post
-    this.steps.clear()
-    this.stepIndex = 0
-    this.questionPartID = ""
-    this.agentPartID = ""
     this.logPartID = ""
     this.logText = ""
 
@@ -105,135 +85,6 @@ export class TestflowMessageBridge {
 
     // 3. Mark session as busy
     this.post({ type: "sessionStatus", sessionID: this.sessionID, status: "busy" })
-  }
-
-  onStep(title: string, status: "start" | "complete" | "exception", stageId?: string): void {
-    const key = stageId ?? String(this.stepIndex)
-
-    if (status === "start") {
-      const partID = uid()
-      this.steps.set(key, { partID, stageId })
-      this.stepIndex++
-      this.post?.({
-        type: "partUpdated",
-        sessionID: this.sessionID,
-        messageID: this.asstMsgID,
-        part: {
-          type: "tool",
-          id: partID,
-          messageID: this.asstMsgID,
-          tool: "testflow-step",
-          state: {
-            status: "running",
-            input: { title, stageId },
-            title,
-          },
-        },
-      })
-      return
-    }
-
-    const tracker = this.steps.get(key)
-    if (!tracker) return
-
-    this.post?.({
-      type: "partUpdated",
-      sessionID: this.sessionID,
-      messageID: this.asstMsgID,
-      part: {
-        type: "tool",
-        id: tracker.partID,
-        messageID: this.asstMsgID,
-        tool: "testflow-step",
-        state:
-          status === "complete"
-            ? { status: "completed", input: { title, stageId }, output: "", title }
-            : { status: "error", input: { title, stageId }, error: "Step failed" },
-      },
-    })
-  }
-
-  onQuestion(qid: string, header: string, question: string, options: { label: string; description: string }[], multiple?: boolean): void {
-    this.questionPartID = uid()
-    this.post?.({
-      type: "partUpdated",
-      sessionID: this.sessionID,
-      messageID: this.asstMsgID,
-      part: {
-        type: "tool",
-        id: this.questionPartID,
-        messageID: this.asstMsgID,
-        tool: "testflow-question",
-        state: {
-          status: "pending",
-          input: { id: qid, header, question, options, multiple },
-        },
-      },
-    })
-  }
-
-  onQuestionAnswered(qid: string): void {
-    if (!this.questionPartID) return
-    this.post?.({
-      type: "partUpdated",
-      sessionID: this.sessionID,
-      messageID: this.asstMsgID,
-      part: {
-        type: "tool",
-        id: this.questionPartID,
-        messageID: this.asstMsgID,
-        tool: "testflow-question",
-        state: {
-          status: "completed",
-          input: { id: qid },
-          output: "",
-          title: "Question answered",
-        },
-      },
-    })
-    this.questionPartID = ""
-  }
-
-  onAgentStart(skill?: string, prompt?: string): void {
-    this.agentPartID = uid()
-    this.post?.({
-      type: "partUpdated",
-      sessionID: this.sessionID,
-      messageID: this.asstMsgID,
-      part: {
-        type: "tool",
-        id: this.agentPartID,
-        messageID: this.asstMsgID,
-        tool: "testflow-agent",
-        state: {
-          status: "running",
-          input: { skill: skill ?? "", prompt: prompt ?? "" },
-          title: skill ? `AI Agent: ${skill}` : "AI Agent",
-        },
-      },
-    })
-  }
-
-  onAgentDone(): void {
-    if (!this.agentPartID) return
-    this.post?.({
-      type: "partUpdated",
-      sessionID: this.sessionID,
-      messageID: this.asstMsgID,
-      part: {
-        type: "tool",
-        id: this.agentPartID,
-        messageID: this.asstMsgID,
-        tool: "testflow-agent",
-        state: {
-          status: "completed",
-          input: {},
-          output: "",
-          title: "AI Agent completed",
-        },
-      },
-    })
-    this.agentPartID = ""
   }
 
   onProgress(
@@ -284,8 +135,6 @@ export class TestflowMessageBridge {
     this.asstMsgID = uid()
     this.logPartID = ""
     this.logText = ""
-    this.steps.clear()
-    this.stepIndex = 0
 
     this.post?.({
       type: "messageCreated",
@@ -336,6 +185,40 @@ export class TestflowMessageBridge {
 
   onError(error: string): void {
     this.appendLog(`! ${error}`)
+  }
+
+  /**
+   * 一锤子命令的最终结果。bridge 将其转为一个 tool: "testflow-result" 的
+   * completed part 渲染成结果卡，渲染细节由 webview 端按 `kind` 分支处理。
+   */
+  onResult(payload: Record<string, unknown>): void {
+    const kind = (payload.kind as string) ?? "unknown"
+    const titles: Record<string, string> = {
+      init: "初始化 TestFlow 框架",
+      new: "创建测试任务",
+      list: "任务列表",
+      switch: "切换默认任务",
+      validate: "校验流程配置",
+      error: "命令执行失败",
+    }
+    const title = titles[kind] ?? "命令结果"
+    this.post?.({
+      type: "partUpdated",
+      sessionID: this.sessionID,
+      messageID: this.asstMsgID,
+      part: {
+        type: "tool",
+        id: uid(),
+        messageID: this.asstMsgID,
+        tool: "testflow-result",
+        state: {
+          status: "completed",
+          input: { kind, ...payload },
+          output: JSON.stringify(payload, null, 2),
+          title,
+        },
+      },
+    })
   }
 
   onDone(exitCode: number, summary?: string): void {
