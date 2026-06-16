@@ -106,28 +106,43 @@ if (hasNodeModules) {
   console.log("Step 3.1: Installing base dependencies...")
   await $`cd ${TARGET} && npm install --omit=dev --omit=optional`
 
-  // testagent_change - map VS Code target to node-pty platform names
-  const platformMap: Record<string, string[]> = {
+  // testagent_change - map VS Code target to platform names
+  const targetMap: Record<string, string[]> = {
     "linux-x64": ["linux-x64"],
     "linux-arm64": ["linux-arm64"],
-    "alpine-x64": ["linux-x64"], // Alpine uses linux binaries
+    "alpine-x64": ["linux-x64"],
     "alpine-arm64": ["linux-arm64"],
     "darwin-x64": ["darwin-x64"],
     "darwin-arm64": ["darwin-arm64"],
     "win32-x64": ["win32-x64"],
   }
 
-  const platforms = targetPlatform ? platformMap[targetPlatform] || [] : Object.values(platformMap).flat()
+  // jieba uses -msvc suffix on win32-x64
+  const jiebaPlatformMap: Record<string, string[]> = {
+    "linux-x64": ["linux-x64-gnu"],
+    "linux-arm64": ["linux-arm64-gnu"],
+    "alpine-x64": ["linux-x64-gnu"],
+    "alpine-arm64": ["linux-arm64-gnu"],
+    "darwin-x64": ["darwin-x64"],
+    "darwin-arm64": ["darwin-arm64"],
+    "win32-x64": ["win32-x64-msvc"],
+  }
+
+  const platforms = targetPlatform ? targetMap[targetPlatform] || [] : Object.values(targetMap).flat()
   const uniquePlatforms = [...new Set(platforms)]
 
   console.log(`Step 3.2: Manually downloading platform binaries for: ${uniquePlatforms.join(", ")}...`)
 
-  // Download and extract platform-specific packages directly from npm registry
   for (const platform of uniquePlatforms) {
     const packages = [
       { name: `@lydell/node-pty-${platform}`, version: "1.2.0-beta.10" },
       { name: `@parcel/watcher-${platform}`, version: "2.5.0" },
     ]
+
+    const jiebaPlatform = targetPlatform ? (jiebaPlatformMap[targetPlatform] || [])[0] : platform
+    if (jiebaPlatform) {
+      packages.push({ name: `@node-rs/jieba-${jiebaPlatform}`, version: "2.0.1" })
+    }
 
     for (const pkg of packages) {
       const tarballUrl = `https://registry.npmjs.org/${pkg.name}/-/${pkg.name.split("/")[1]}-${pkg.version}.tgz`
@@ -169,6 +184,15 @@ const platformMap: Record<string, string[]> = {
   "darwin-arm64": ["darwin-arm64"],
   "win32-x64": ["win32-x64"],
 }
+const jiebaPlatformMap: Record<string, string[]> = {
+  "linux-x64": ["linux-x64-gnu"],
+  "linux-arm64": ["linux-arm64-gnu"],
+  "alpine-x64": ["linux-x64-gnu"],
+  "alpine-arm64": ["linux-arm64-gnu"],
+  "darwin-x64": ["darwin-x64"],
+  "darwin-arm64": ["darwin-arm64"],
+  "win32-x64": ["win32-x64-msvc"],
+}
 const platforms = targetPlatform ? platformMap[targetPlatform] || [] : Object.values(platformMap).flat()
 const uniquePlatforms = [...new Set(platforms)]
 
@@ -183,12 +207,32 @@ for (const platform of uniquePlatforms) {
   }
 }
 
+if (targetPlatform) {
+  const jiebaPlatforms = jiebaPlatformMap[targetPlatform] || []
+  for (const platform of jiebaPlatforms) {
+    const pkgPath = join(TARGET, "node_modules", `@node-rs/jieba-${platform}`)
+    if (!existsSync(pkgPath)) {
+      missing.push(`jieba-${platform}`)
+      console.log(`  ✗ jieba-${platform} NOT FOUND`)
+    } else {
+      console.log(`  ✓ jieba-${platform}`)
+    }
+  }
+}
+
 if (missing.length > 0 && targetPlatform) {
-  console.error(`\n❌ Error: Missing node-pty binaries for: ${missing.join(", ")}`)
-  console.error("   Extension will not work on these platforms!")
+  const nodeptyMissing = missing.filter((m) => !String(m).startsWith("jieba"))
+  const jiebaMissing = missing.filter((m) => String(m).startsWith("jieba"))
+  if (nodeptyMissing.length > 0) {
+    console.error(`\n❌ Error: Missing node-pty binaries for: ${nodeptyMissing.join(", ")}`)
+    console.error("   Extension will not work on these platforms!")
+  }
+  if (jiebaMissing.length > 0) {
+    console.error(`\n❌ Error: Missing jieba binaries: ${jiebaMissing.join(", ")}`)
+  }
   process.exit(1)
 } else if (missing.length > 0) {
-  console.warn(`\n⚠️  Warning: Missing node-pty binaries for: ${missing.join(", ")}`)
+  console.warn(`\n⚠️  Warning: Missing binaries: ${missing.join(", ")}`)
   console.warn("   Extension may not work on these platforms!")
 }
 // testagent_change end
