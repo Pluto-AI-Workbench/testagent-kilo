@@ -781,6 +781,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
             message.agent,
             message.variant,
             files,
+            message.goal,
           )
           break
         }
@@ -3236,6 +3237,7 @@ export class KiloProvider implements vscode.WebviewViewProvider, TelemetryProper
     agent?: string,
     variant?: string,
     files?: MessageFile[],
+    goal?: string,
   ): Promise<void> {
     // testagent_change start - intercept sdt-* commands for testflow
     if (command.startsWith("sdt-")) {
