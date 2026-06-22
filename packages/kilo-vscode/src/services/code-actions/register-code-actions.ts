@@ -52,9 +52,10 @@ export function registerCodeActions(
       provider.postMessage({ type: "triggerTask", text: prompt })
     }),
 
-    vscode.commands.registerCommand("testagent.new.addToContext", () => {
+    vscode.commands.registerCommand("testagent.new.addToContext", async () => {
       const ctx = getEditorContext()
       if (!ctx) return
+      await vscode.commands.executeCommand("testagent.SidebarProvider.focus")
       target().postMessage({
         type: "appendCodeContext",
         context: {
