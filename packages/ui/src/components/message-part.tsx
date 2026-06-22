@@ -1191,7 +1191,7 @@ export function UserMessageDisplay(props: {
   )
 }
 
-type HighlightSegment = { text: string; type?: "file" | "agent" }
+type HighlightSegment = { text: string; type?: "file" | "agent" | "code" }
 
 function HighlightedText(props: { text: string; references: FilePart[]; agents: AgentPart[] }) {
   const segments = createMemo(() => {
@@ -1206,22 +1206,44 @@ function HighlightedText(props: { text: string; references: FilePart[]; agents: 
         .map((a) => ({ start: a.source!.start, end: a.source!.end, type: "agent" as const })),
     ].sort((a, b) => a.start - b.start)
 
-    const result: HighlightSegment[] = []
+    const refSegments: HighlightSegment[] = []
     let lastIndex = 0
 
     for (const ref of allRefs) {
       if (ref.start < lastIndex) continue
 
       if (ref.start > lastIndex) {
-        result.push({ text: text.slice(lastIndex, ref.start) })
+        refSegments.push({ text: text.slice(lastIndex, ref.start) })
       }
 
-      result.push({ text: text.slice(ref.start, ref.end), type: ref.type })
+      refSegments.push({ text: text.slice(ref.start, ref.end), type: ref.type })
       lastIndex = ref.end
     }
 
     if (lastIndex < text.length) {
-      result.push({ text: text.slice(lastIndex) })
+      refSegments.push({ text: text.slice(lastIndex) })
+    }
+
+    const result: HighlightSegment[] = []
+    for (const seg of refSegments) {
+      if (seg.type) {
+        result.push(seg)
+      } else {
+        let remaining = seg.text
+        const re = /```[\s\S]*?```/g
+        let match: RegExpExecArray | null = null
+        let lastPos = 0
+        while ((match = re.exec(remaining)) !== null) {
+          if (match.index > lastPos) {
+            result.push({ text: remaining.slice(lastPos, match.index) })
+          }
+          result.push({ text: match[0].slice(3, -3), type: "code" })
+          lastPos = match.index + match[0].length
+        }
+        if (lastPos < remaining.length) {
+          result.push({ text: remaining.slice(lastPos) })
+        }
+      }
     }
 
     return result

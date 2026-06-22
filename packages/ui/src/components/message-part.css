@@ -143,6 +143,11 @@
       color: var(--syntax-type);
     }
 
+    [data-highlight="code"] {
+      color: var(--syntax-string);
+      font-family: var(--font-family-mono);
+    }
+
     max-width: 100%;
   }
 

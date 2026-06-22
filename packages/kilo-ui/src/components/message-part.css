@@ -273,6 +273,11 @@ html[data-theme="kilo-vscode"] [data-component="bash-output"] {
     &[data-queued] {
       opacity: 0.6;
     }
+
+    [data-highlight="code"] {
+      color: var(--syntax-string, var(--vscode-editor-foreground));
+      font-family: var(--font-family-mono, monospace);
+    }
   }
 
   [data-slot="user-message-queued-indicator"] {
