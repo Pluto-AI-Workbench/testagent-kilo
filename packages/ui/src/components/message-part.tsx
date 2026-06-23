@@ -1171,16 +1171,24 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
   )
 }
 
-type HighlightSegment = { text: string; type?: "file" | "agent" }
+type HighlightSegment = { text: string; type?: "file" | "agent"; filePath?: string; startLine?: number; endLine?: number }
+
+// Regex to parse "path:start-end" or "path:line" from the end of a string
+const FILE_CHIP_PATH_RE = /(.+?):(\d+)(?:-(\d+))?$/
+
+// Regex to find "path:start-end" or bare file path anywhere in text
+const FILE_CHIP_INLINE_RE = /(?:^|\s)(@?[\w\-./]+(?:\.[a-zA-Z]+))(?::(\d+)(?:-(\d+))?)?/g
 
 function HighlightedText(props: { text: string; references: FilePart[]; agents: AgentPart[] }) {
+  const data = useData()
   const segments = createMemo(() => {
     const text = props.text
 
-    const allRefs: { start: number; end: number; type: "file" | "agent" }[] = [
+    // Build refs with FilePart carried through for file segments
+    const allRefs: { start: number; end: number; type: "file" | "agent"; filePart?: FilePart }[] = [
       ...props.references
         .filter((r) => r.source?.text?.start !== undefined && r.source?.text?.end !== undefined)
-        .map((r) => ({ start: r.source!.text!.start, end: r.source!.text!.end, type: "file" as const })),
+        .map((r) => ({ start: r.source!.text!.start, end: r.source!.text!.end, type: "file" as const, filePart: r })),
       ...props.agents
         .filter((a) => a.source?.start !== undefined && a.source?.end !== undefined)
         .map((a) => ({ start: a.source!.start, end: a.source!.end, type: "agent" as const })),
@@ -1196,7 +1204,20 @@ function HighlightedText(props: { text: string; references: FilePart[]; agents: 
         result.push({ text: text.slice(lastIndex, ref.start) })
       }
 
-      result.push({ text: text.slice(ref.start, ref.end), type: ref.type })
+      const slice = text.slice(ref.start, ref.end)
+      if (ref.type === "file" && ref.filePart?.source && ref.filePart.source.type === "file") {
+        // Parse line numbers from the text (e.g. "packages/foo.ts:10-25")
+        const m = slice.match(FILE_CHIP_PATH_RE)
+        result.push({
+          text: slice,
+          type: "file",
+          filePath: ref.filePart.source.path,
+          startLine: m ? parseInt(m[2], 10) : undefined,
+          endLine: m ? (m[3] ? parseInt(m[3], 10) : parseInt(m[2], 10)) : undefined,
+        })
+      } else {
+        result.push({ text: slice, type: ref.type })
+      }
       lastIndex = ref.end
     }
 
@@ -1204,10 +1225,75 @@ function HighlightedText(props: { text: string; references: FilePart[]; agents: 
       result.push({ text: text.slice(lastIndex) })
     }
 
-    return result
+    // Scan plain-text segments for inline file:line patterns and split them
+    const expanded: (HighlightSegment & { filePath?: string; startLine?: number; endLine?: number })[] = []
+    for (const seg of result) {
+      if (seg.type || !seg.filePath) {
+        if (!seg.type) {
+          let remaining = seg.text
+          let lastPos = 0
+          const re = FILE_CHIP_INLINE_RE
+          re.lastIndex = 0
+          let m: RegExpExecArray | null
+          while ((m = re.exec(remaining)) !== null) {
+            if (m.index > 0 && remaining[m.index - 1] !== " " && remaining[m.index - 1] !== "\n") {
+              continue
+            }
+            if (m.index > lastPos) {
+              expanded.push({ text: remaining.slice(lastPos, m.index) })
+            }
+            expanded.push({
+              text: m[0],
+              type: "file",
+              filePath: m[1],
+              startLine: m[2] ? parseInt(m[2], 10) : undefined,
+              endLine: m[3] ? parseInt(m[3], 10) : (m[2] ? parseInt(m[2], 10) : undefined),
+            })
+            lastPos = m.index + m[0].length
+          }
+          if (lastPos < remaining.length) {
+            expanded.push({ text: remaining.slice(lastPos) })
+          }
+        } else {
+          expanded.push(seg)
+        }
+      } else {
+        expanded.push(seg)
+      }
+    }
+
+    return expanded
   })
 
-  return <For each={segments()}>{(segment) => <span data-highlight={segment.type}>{segment.text}</span>}</For>
+  const handleOpenFile = (path: string, start?: number, end?: number) => {
+    if (data.openFile) {
+      data.openFile(path, start, end)
+    }
+  }
+
+  return (
+    <For each={segments()}>
+      {(segment) =>
+        segment.type === "file" && segment.filePath ? (
+          <span
+            data-highlight="file"
+            data-slot="user-message-file-chip"
+            onClick={() => handleOpenFile(segment.filePath!, segment.startLine, segment.endLine)}
+          >
+            <FileIcon node={{ path: segment.filePath, type: "file" }} />
+            <span data-slot="user-message-file-chip-path">{segment.filePath}</span>
+            {segment.startLine ? (
+              <span data-slot="user-message-file-chip-lines">
+                L{segment.startLine}{segment.endLine && segment.endLine !== segment.startLine ? `-${segment.endLine}` : ""}
+              </span>
+            ) : null}
+          </span>
+        ) : (
+          <span data-highlight={segment.type}>{segment.text}</span>
+        )
+      }
+    </For>
+  )
 }
 
 export function Part(props: MessagePartProps) {

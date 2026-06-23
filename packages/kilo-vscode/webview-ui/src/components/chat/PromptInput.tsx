@@ -50,7 +50,7 @@ function mergeReviewComments(current: ReviewComment[], incoming: ReviewComment[]
 }
 
 function formatCodeContext(item: CodeContext) {
-  return `${item.file}:${item.start}-${item.end}\n\`\`\`\n${item.text}\n\`\`\``
+  return `${item.file}:${item.start}-${item.end}`
 }
 
 interface PromptInputProps {
