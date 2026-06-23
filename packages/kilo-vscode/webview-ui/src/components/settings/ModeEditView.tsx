@@ -9,7 +9,7 @@ import { IconButton } from "@kilocode/kilo-ui/icon-button"
 import { useConfig } from "../../context/config"
 import { useSession } from "../../context/session"
 import { useLanguage } from "../../context/language"
-import type { AgentConfig, AgentInfo, PermissionRuleItem } from "../../types/messages"
+import type { AgentConfig, AgentInfo, PermissionConfig, PermissionLevel, PermissionRule, PermissionRuleItem } from "../../types/messages"
 import SettingsRow from "./SettingsRow"
 import { buildExport } from "./mode-io"
 
@@ -71,6 +71,36 @@ const ModeEditView: Component<Props> = (props) => {
     anchor.click()
     URL.revokeObjectURL(url)
   }
+
+  function cfgPermToRules(perm: PermissionConfig | undefined): PermissionRuleItem[] {
+    if (!perm) return []
+    const out: PermissionRuleItem[] = []
+    for (const [key, val] of Object.entries(perm)) {
+      if (typeof val === "string") {
+        out.push({ permission: key, pattern: "*", action: val })
+      } else if (val && typeof val === "object") {
+        for (const [pattern, action] of Object.entries(val)) {
+          if (action !== null) {
+            out.push({ permission: key, pattern, action })
+          }
+        }
+      }
+    }
+    return out
+  }
+
+  // Merge config permissions (editable) with computed permissions (read-only fallback).
+  // Config values override computed ones so the table reflects the actual local state.
+  const displayRules = createMemo(() => {
+    const base = agent()?.permission ?? []
+    const cfgRules = cfgPermToRules(cfg().permission)
+    if (cfgRules.length === 0) return base
+
+    const map = new Map<string, PermissionRuleItem>()
+    for (const r of base) map.set(`${r.permission}\x00${r.pattern}`, r)
+    for (const r of cfgRules) map.set(`${r.permission}\x00${r.pattern}`, r)
+    return [...map.values()]
+  })
 
   return (
     <div>
@@ -274,16 +304,30 @@ const ModeEditView: Component<Props> = (props) => {
         </SettingsRow>
       </Card>
 
-      {/* Calculated permissions (read-only, collapsible) */}
-      <Show when={agent()?.permission} keyed>
-        {(rules) => (
-          <PermissionRuleset
-            agent={props.name}
-            rules={rules}
-            expanded={expanded()}
-            onToggle={() => setExpanded((v) => !v)}
-          />
-        )}
+      {/* Calculated permissions (editable, collapsible) */}
+      <Show when={displayRules().length > 0}>
+        <PermissionRuleset
+          agent={props.name}
+          rules={displayRules()}
+          expanded={expanded()}
+          onToggle={() => setExpanded((v) => !v)}
+          onUpdate={(perm, pattern, action) => {
+            const p = { ...(cfg().permission ?? {}) } as Record<string, PermissionRule>
+            if (pattern === "*") {
+              p[perm] = action
+            } else {
+              const merged = displayRules()
+              const wc = merged.find((r) => r.permission === perm && r.pattern === "*")?.action ?? "allow"
+              const base: Record<string, PermissionLevel> = { "*": wc as PermissionLevel }
+              for (const r of merged) {
+                if (r.permission === perm && r.pattern !== "*") base[r.pattern] = r.action as PermissionLevel
+              }
+              base[pattern] = action
+              p[perm] = base
+            }
+            update({ permission: Object.keys(p).length ? p : undefined })
+          }}
+        />
       </Show>
 
       <div style={{ display: "flex", "justify-content": "flex-end" }}>
@@ -311,6 +355,7 @@ interface RulesetProps {
   rules: PermissionRuleItem[]
   expanded: boolean
   onToggle: () => void
+  onUpdate?: (permission: string, pattern: string, action: PermissionLevel) => void
 }
 
 const PermissionRuleset: Component<RulesetProps> = (props) => {
@@ -332,9 +377,34 @@ const PermissionRuleset: Component<RulesetProps> = (props) => {
 
   const BUILTIN_ORDER = ["question", "bash", "read", "glob", "grep", "edit", "write", "task", "webfetch", "todowrite", "skill", "sandbox"]
 
-  // Sort: built-in tools first (in predefined order), then pattern="*" rules, then pattern-specific rules
+  // Deduplicate by permission+pattern (last wins — matches backend findLast semantics).
+  // Then expand the wildcard (*/*) into individual rows for each built-in tool that
+  // doesn't already have an explicit pattern="*" entry, so users can override any tool.
   const sortedRules = createMemo(() => {
-    return [...props.rules].sort((a, b) => {
+    const dedup = new Map<string, PermissionRuleItem>()
+    for (const rule of props.rules) {
+      dedup.set(`${rule.permission}\x00${rule.pattern}`, rule)
+    }
+
+    // Extract wildcard action and remove the wildcard row (re-added later)
+    const wildcard = dedup.get("*\x00*")
+    dedup.delete("*\x00*")
+
+    // For each built-in tool without an explicit pattern="*" entry, add an inferred row
+    const hasWildcard = new Set<string>()
+    for (const rule of dedup.values()) {
+      if (rule.pattern === "*") hasWildcard.add(rule.permission)
+    }
+    for (const tool of BUILTIN_ORDER) {
+      if (!hasWildcard.has(tool) && wildcard) {
+        dedup.set(`${tool}\x00*`, { permission: tool, pattern: "*", action: wildcard.action })
+      }
+    }
+
+    // Re-add wildcard row at the end for non-built-in tools
+    if (wildcard) dedup.set("*\x00*", wildcard)
+
+    return [...dedup.values()].sort((a, b) => {
       const ai = BUILTIN_ORDER.indexOf(a.permission)
       const bi = BUILTIN_ORDER.indexOf(b.permission)
       if (ai !== -1 && bi !== -1) return ai - bi
@@ -475,16 +545,26 @@ const PermissionRuleset: Component<RulesetProps> = (props) => {
                       <td style={{ padding: "3px 8px" }}>{rule.permission}</td>
                       <td style={{ padding: "3px 8px", color: "var(--text-weak-base)" }}>{rule.pattern}</td>
                       <td style={{ padding: "3px 8px" }}>
-                        <span
-                          style={{
-                            padding: "1px 4px",
-                            "border-radius": "2px",
-                            background: colors.bg,
-                            color: colors.fg,
-                          }}
+                        <Show
+                          when={props.onUpdate}
+                          fallback={
+                            <span
+                              style={{
+                                padding: "1px 4px",
+                                "border-radius": "2px",
+                                background: colors.bg,
+                                color: colors.fg,
+                              }}
+                            >
+                              {rule.action}
+                            </span>
+                          }
                         >
-                          {rule.action}
-                        </span>
+                          <ActionCellDropdown
+                            action={rule.action as PermissionLevel}
+                            onChange={(action) => props.onUpdate!(rule.permission, rule.pattern, action)}
+                          />
+                        </Show>
                       </td>
                     </tr>
                   )
@@ -505,6 +585,34 @@ const PermissionRuleset: Component<RulesetProps> = (props) => {
         </div>
       </Show>
     </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Inline action dropdown for editable permission table
+// ---------------------------------------------------------------------------
+
+const ActionCellDropdown: Component<{
+  action: PermissionLevel
+  onChange: (action: PermissionLevel) => void
+}> = (props) => {
+  const language = useLanguage()
+  const opts: { value: PermissionLevel; label: string }[] = [
+    { value: "allow", label: language.t("settings.autoApprove.level.allow") },
+    { value: "ask", label: language.t("settings.autoApprove.level.ask") },
+    { value: "deny", label: language.t("settings.autoApprove.level.deny") },
+  ]
+  return (
+    <Select
+      options={opts}
+      current={opts.find((o) => o.value === props.action)}
+      value={(o) => o.value}
+      label={(o) => o.label}
+      onSelect={(o) => o && props.onChange(o.value)}
+      variant="secondary"
+      size="small"
+      triggerVariant="settings"
+    />
   )
 }
 

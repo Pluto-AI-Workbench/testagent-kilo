@@ -55,3 +55,5 @@ packages/opencode/.artifacts/
 
 # Build artifacts - nodejs-server
 packages/kilo-vscode/nodejs-server/
+.opencode/*
+.testagent/*

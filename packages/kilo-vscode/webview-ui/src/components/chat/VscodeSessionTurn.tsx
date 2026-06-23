@@ -86,9 +86,23 @@ export const VscodeSessionTurn: Component<VscodeSessionTurnProps> = (props) => {
 
   const interrupted = createMemo(() => assistantMessages().some((m) => m.error?.name === "MessageAbortedError"))
 
-  const error = createMemo(
-    () => assistantMessages().find((m) => m.error && m.error.name !== "MessageAbortedError")?.error,
-  )
+  const [dismissedErrorIds, setDismissedErrorIds] = createSignal<Set<string>>(new Set())
+
+  const error = createMemo(() => {
+    const ids = dismissedErrorIds()
+    return assistantMessages().find(
+      (m) => m.error && m.error.name !== "MessageAbortedError" && !ids.has(m.id),
+    )?.error
+  })
+
+  function dismissError() {
+    const msg = assistantMessages().find(
+      (m) => m.error && m.error.name !== "MessageAbortedError",
+    )
+    if (msg) {
+      setDismissedErrorIds((prev) => new Set([...prev, msg.id]))
+    }
+  }
 
   // Diffs from message summary
   const diffs = createMemo(() => {
@@ -155,7 +169,8 @@ export const VscodeSessionTurn: Component<VscodeSessionTurnProps> = (props) => {
     for (const msg of assistantMsgs) {
       if (msg.tokens) {
         const t = msg.tokens
-        const entry = (t.input ?? 0) + (t.output ?? 0) + (t.reasoning ?? 0) + (t.cache?.read ?? 0) + (t.cache?.write ?? 0)
+        const entry =
+          (t.input ?? 0) + (t.output ?? 0) + (t.reasoning ?? 0) + (t.cache?.read ?? 0) + (t.cache?.write ?? 0)
         totalTokens += entry
         inputTokens += t.input ?? 0
         outputTokens += t.output ?? 0
@@ -179,7 +194,16 @@ export const VscodeSessionTurn: Component<VscodeSessionTurnProps> = (props) => {
       else duration = `${seconds}秒`
     }
 
-    return { totalTokens, inputTokens, outputTokens, reasoningTokens, cacheReadTokens, cacheWriteTokens, duration, completed: !!endTime }
+    return {
+      totalTokens,
+      inputTokens,
+      outputTokens,
+      reasoningTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+      duration,
+      completed: !!endTime,
+    }
   })
 
   return (
@@ -231,15 +255,17 @@ export const VscodeSessionTurn: Component<VscodeSessionTurnProps> = (props) => {
                   if (stats.cacheWriteTokens > 0) tipParts.push(`缓存写: ${fmt(stats.cacheWriteTokens)}`)
                   tipParts.push(`输出: ${fmt(stats.outputTokens)}`)
                   return (
-                    <div style={{
-                      "font-size": "12px",
-                      "color": "var(--vscode-descriptionForeground)",
-                      "margin-top": "-4px",
-                      "padding": "2px 8px",
-                      "opacity": "0.8"
-                    }}>
+                    <div
+                      style={{
+                        "font-size": "12px",
+                        color: "var(--vscode-descriptionForeground)",
+                        "margin-top": "-4px",
+                        padding: "2px 8px",
+                        opacity: "0.8",
+                      }}
+                    >
                       <Tooltip placement="top-start" value={tipParts.join(" | ")}>
-                        <span style={{"cursor":"pointer"}}>
+                        <span style={{ cursor: "pointer" }}>
                           本轮消耗token: {fmt(stats.totalTokens)} {stats.duration && ` | 耗时: ${stats.duration}`}
                         </span>
                       </Tooltip>
@@ -347,7 +373,35 @@ export const VscodeSessionTurn: Component<VscodeSessionTurnProps> = (props) => {
 
           {/* Error handling */}
           <Show when={error()}>
-            <ErrorDisplay error={error()!} onLogin={server.startLogin} />
+            <div style={{ position: "relative" }}>
+              <span
+                onClick={dismissError}
+                style={{
+                  position: "absolute",
+                  top: "4px",
+                  right: "4px",
+                  width: "20px",
+                  height: "20px",
+                  display: "flex",
+                  "align-items": "center",
+                  "justify-content": "center",
+                  cursor: "pointer",
+                  "border-radius": "4px",
+                  "z-index": 1,
+                  color: "var(--vscode-errorForeground)",
+                  opacity: "0.7",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.7")}
+              >
+                <Tooltip value={"关闭"} placement="top">
+                  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor" width="14" height="14">
+                    <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/>
+                  </svg>
+                </Tooltip>
+              </span>
+              <ErrorDisplay error={error()!} onLogin={server.startLogin} />
+            </div>
             <div>
               {/* testagent_change start - 修改重试按钮为继续任务 */}
               <span
@@ -368,19 +422,6 @@ export const VscodeSessionTurn: Component<VscodeSessionTurnProps> = (props) => {
                   </svg>
                 </Tooltip>
               </span>
-              {/* testagent_change end */}
-              {/* testagent_change 注释继续 */}
-              {/* <span
-                onClick={() => {
-                  const sel = session.selected()
-                  session.sendMessage("继续", sel?.providerID, sel?.modelID)
-                }}
-                style={{ width: "16px", display: "inline-block", cursor: "pointer" }}
-              >
-                <Tooltip value={"继续"} placement="top">
-                  <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="4" width="16" height="16"><path d="M14 24L7 19V7L41 24L7 41V29L14 24ZM14 24H39" stroke-miterlimit="3.8637" stroke-linecap="butt"></path></svg>
-                </Tooltip>
-              </span> */}
             </div>
           </Show>
         </div>
