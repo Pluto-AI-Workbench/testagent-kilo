@@ -1277,6 +1277,9 @@ export const dict = {
 
   "settings.context.autoCompaction.title": "Auto Compaction",
   "settings.context.autoCompaction.description": "Automatically compact context when it's full",
+  "settings.context.compactionLimit.title": "Auto Compaction Limit",
+  "settings.context.compactionLimit.description":
+    "Compact when context reaches this percentage of the model window. Leave blank to use the safety buffer only.",
   "settings.context.prune.title": "Prune Old Outputs",
   "settings.context.prune.description": "Remove old tool outputs during compaction",
   "settings.context.watcherPatterns": "File Watcher Ignore Patterns",
